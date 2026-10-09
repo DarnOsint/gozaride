@@ -1,0 +1,74 @@
+name: Gozaride CI/CD
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Run TypeScript Type Check
+        run: npx tsc --noEmit
+        
+      - name: Run ESLint
+        run: npm run lint
+        
+      - name: Build Next.js
+        run: npm run build
+        
+      - name: Verify Build
+        run: |
+          if [ -d ".next" ]; then
+            echo "Build successful - .next directory exists"
+          else
+            echo "Build failed - .next directory not found"
+            exit 1
+          fi
+        
+      - name: Deploy to VPS
+        if: github.ref == 'refs/heads/master'
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          echo "$SSH_PRIVATE_KEY" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          
+          # Create deployment directory
+          ssh -i /tmp/deploy_key $VPS_USER@$VPS_HOST "mkdir -p /var/www/gozaride"
+          
+          # Copy files via SSH
+          scp -i /tmp/deploy_key -r .next package.json prisma/ node_modules/ $VPS_USER@$VPS_HOST:/var/www/gozaride/
+          scp -i /tmp/deploy_key nginx.conf $VPS_USER@$VPS_HOST:/etc/nginx/conf.d/gozaride.conf
+          scp -i /tmp/deploy_key ecosystem.config.js $VPS_USER@$VPS_HOST:/var/www/gozaride/
+          
+          # Install production dependencies
+          ssh -i /tmp/deploy_key $VPS_USER@$VPS_HOST "cd /var/www/gozaride && npm ci --production"
+          
+          # Restart application via PM2
+          ssh -i /tmp/deploy_key $VPS_USER@$VPS_HOST "cd /var/www/gozaride && pm2 start ecosystem.config.js || pm2 restart all"
+          
+          # Reload Nginx
+          ssh -i /tmp/deploy_key $VPS_USER@$VPS_HOST "nginx -t && nginx -s reload"
+          
+      - name: Notify Deployment
+        if: always()
+        run: |
+          echo "Deployment to VPS complete"
+          echo "App URL: https://gozaride.com"
