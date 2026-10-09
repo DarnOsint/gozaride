@@ -1,54 +1,70 @@
+/* Gozaride - Move Easy. Go Anywhere. */
+import { Inter } from "next/font/inter";
+import "../globals.css";
+
+const inter = Inter({ subsets: ["latin"] });
+
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-indigo-100 p-6">
-      <header className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900">
-          Welcome to <span className="text-orange-600">Gozaride</span>
-        </h1>
-        <p className="text-lg text-gray-600 mt-2">
-          Move Easy. Go Anywhere.
-        </p>
-      </header>
+    <div className={`${inter.className} min-h-screen bg-gradient-to-b from-blue-50 to-indigo-100 flex items-center justify-center p-6`}>
+      <div className="max-w-7xl w-full text-center">
+        {/* Hero Header */}
+        <header className="mb-12">
+          <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-gray-900 mb-4">
+            Move Easy.<span className="text-orange-600">.</span> Go Anywhere.
+          </h1>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Your all-in-one mobility platform. From taxi rides to food delivery, we go everywhere you need.
+          </p>
+        </header>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <a href="/services/taxi" className="group rounded-2xl bg-white p-6 shadow-lg hover:shadow-2xl hover:transition-shadow duration-300">
-          <div className="text-3xl mb-2">🚕</div>
-          <h3 className="font-semibold text-gray-900">Taxi Rides</h3>
-          <p className="text-gray-500 mt-1">Book rides instantly</p>
-        </a>
+        {/* Services Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-2xl mx-auto">
+          
+          <!-- Taxi -->
+          <a href="/services/taxi" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
+            <div className="text-4xl mb-3">🚕</div>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Taxi Rides</h3>
+            <p className="text-gray-500 line-clamp-2">Book rides instantly with real-time tracking and professional drivers.</p>
+          </a>
 
-        <a href="/services/motorcycle" className="group rounded-2xl bg-white p-6 shadow-lg hover:shadow-2xl hover:transition-shadow duration-300">
-          <div className="text-3xl mb-2">🛵</div>
-          <h3 className="font-semibold text-gray-900">Motorcycle Delivery</h3>
-          <p className="text-gray-500 mt-1">Fast delivery service</p>
-        </a>
+          <!-- Motorcycle Delivery -->
+          <a href="/services/motorcycle" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
+            <div className="text-4xl mb-3">🛵</div>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Motorcycle Delivery</h3>
+            <p className="text-gray-500 line-clamp-2">Fast and reliable delivery service for parcels and documents.</p>
+          </a>
 
-        <a href="/services/package" className="group rounded-2xl bg-white p-6 shadow-lg hover:shadow-2xl hover:transition-shadow duration-300">
-          <div className="text-3xl mb-2">📦</div>
-          <h3 className="font-semibold text-gray-900">Package Delivery</h3>
-          <p className="text-gray-500 mt-1">Secure parcel service</p>
-        </a>
-      </section>
+          <!-- Package Delivery -->
+          <a href="/services/package" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
+            <div className="text-4xl mb-3">📦</div>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Package Delivery</h3>
+            <p className="text-gray-500 line-clamp-2">Secure parcel service nationwide with real-time tracking.</p>
+          </a>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-        <a href="/services/food" className="group rounded-2xl bg-white p-6 shadow-lg hover:shadow-2xl hover:transition-shadow duration-300">
-          <div className="text-3xl mb-2">🍔</div>
-          <h3 className="font-semibold text-gray-900">Food Delivery</h3>
-          <p className="text-gray-500 mt-1">Hot meals delivered</p>
-        </a>
+        </div>
 
-        <a href="/services/rental" className="group rounded-2xl bg-white p-6 shadow-lg hover:shadow-2xl hover:transition-shadow duration-300">
-          <div className="text-3xl mb-2">🚗</div>
-          <h3 className="font-semibold text-gray-900">Car Rental</h3>
-          <p className="text-gray-500 mt-1">Rent a vehicle</p>
-        </a>
+        <!-- More Services -->
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 max-w-2xl mx-auto">
+          <a href="/services/food" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
+            <div className="text-4xl mb-3">🍔</div>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Food Delivery</h3>
+            <p className="text-gray-500 line-clamp-2">Hot meals delivered from your favorite local restaurants.</p>
+          </a>
 
-        <a href="/services/bus" className="group rounded-2xl bg-white p-6 shadow-lg hover:shadow-2xl hover:transition-shadow duration-300">
-          <div className="text-3xl mb-2">🚌</div>
-          <h3 className="font-semibold text-gray-900">Transport Services</h3>
-          <p className="text-gray-500 mt-1">Public transit options</p>
-        </a>
-      </section>
+          <a href="/services/rental" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
+            <div className="text-4xl mb-3">🚗</div>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Car Rental</h3>
+            <p className="text-gray-500 line-clamp-2">Rent a vehicle for any occasion - SUVs, sedans, and more.</p>
+          </a>
+
+          <a href="/services/bus" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
+            <div className="text-4xl mb-3">🚌</div>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-2">Transport Services</h3>
+            <p className="text-gray-500 line-clamp-2">Public transit options and route planning for your journey.</p>
+          </a>
+        </div>
+      </div>
     </div>
   );
 }
