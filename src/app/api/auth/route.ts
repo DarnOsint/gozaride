@@ -1,4 +1,4 @@
-/* Auth API Routes - Gozaride Backend */
+/* Auth API Routes - Gozaride Backend with SSP/USD Currency Support */
 import { NextResponse } from "next/server";
 import { execSync } from "child_process";
 import jwt from "jsonwebtoken";
@@ -23,15 +23,13 @@ function query(sql: string, params: any[] = []) {
 
 // Helper: Hash password async
 async function hashPassword(password: string) {
-  // For sync API, use a simple approach
-  // In production, use proper async bcrypt
-  return require("crypto").createHash('sha256').update(password).digest('base64');
+  const salt = await bcrypt.genSalt(SALT_ROUNDS);
+  return bcrypt.hash(password, salt);
 }
 
 // Helper: Verify password
-function verifyPassword(password: string, hashed: string) {
-  const hashedPassword = require("crypto").createHash('sha256').update(password).digest('base64');
-  return hashedPassword === hashed;
+async function verifyPassword(password: string, hashed: string) {
+  return bcrypt.compare(password, hashed);
 }
 
 // Helper: Generate JWT
@@ -41,13 +39,13 @@ function generateToken(userId: string, role: string) {
 
 // Helper: Get user by email
 function getUserByEmail(email: string) {
-  const results = query("SELECT id, email, password_hash, full_name, role, phone FROM users WHERE email = $1", [email]);
+  const results = query("SELECT id, email, password_hash, full_name, role, default_currency, wallet_balance_ssp, wallet_balance_usd FROM users WHERE email = $1", [email]);
   return results.length > 0 ? results[0] : null;
 }
 
 // Helper: Get user by ID
 function getUserById(userId: string) {
-  const results = query("SELECT id, email, full_name, role, phone, created_at FROM users WHERE id = $1", [userId]);
+  const results = query("SELECT id, email, full_name, role, default_currency, wallet_balance_ssp, wallet_balance_usd FROM users WHERE id = $1", [userId]);
   return results.length > 0 ? results[0] : null;
 }
 
@@ -87,10 +85,11 @@ export async function POST(request: Request) {
     // Hash password
     const passwordHash = await hashPassword(password);
 
-    // Create user
+    // Create user with default currency (default to USD for new users)
+    const defaultCurrency = role === "customer" ? "usd" : "ssd";
     const result = query(
-      "INSERT INTO users (email, password_hash, full_name, phone, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, full_name, role, created_at",
-      [email, passwordHash, full_name, phone, role]
+      "INSERT INTO users (email, password_hash, full_name, phone, role, default_currency) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, email, full_name, role, default_currency, wallet_balance_ssp, wallet_balance_usd",
+      [email, passwordHash, full_name, phone, role, defaultCurrency]
     );
 
     const newUser = result.length > 0 ? result[0] : null;
@@ -102,26 +101,36 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create role-specific profile
+    // Create role-specific profile with currency
     if (role === "customer") {
       query(
-        "INSERT INTO customer_profiles (user_id, home_latitude, home_longitude, work_latitude, work_longitude, preferred_pickup_zone) VALUES ($1, $2, $3, $4, $5, $6)",
-        [newUser.id, null, null, null, null, ""])
+        "INSERT INTO customer_profiles (user_id, default_currency, home_latitude, home_longitude, work_latitude, work_longitude, preferred_pickup_zone) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [newUser.id, defaultCurrency, null, null, null, null, ""])
     } else if (role === "driver") {
       query(
-        "INSERT INTO driver_profiles (user_id, vehicle_type, license_number, status, current_latitude, current_longitude, is_available) VALUES ($1, $2, $3, 'active', $4, $5, true)",
-        [newUser.id, "", "", null, null])
+        "INSERT INTO driver_profiles (user_id, default_currency, vehicle_type, license_number, status, current_latitude, current_longitude, is_available) VALUES ($1, $2, $3, $4, 'active', $5, $6, true)",
+        [newUser.id, defaultCurrency, "", "", null, null])
     } else if (role === "shop") {
       query(
-        "INSERT INTO shop_profiles (user_id, shop_name, business_type, latitude, longitude, delivery_radius_km) VALUES ($1, $2, $3, $4, $5, $6)",
-        [newUser.id, full_name, "service", null, null, 5.0])
+        "INSERT INTO shop_profiles (user_id, default_currency, shop_name, business_type, latitude, longitude, delivery_radius_km) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [newUser.id, defaultCurrency, full_name, "service", null, null, 5.0])
     }
 
     // Generate JWT token
     const token = generateToken(newUser.id, newUser.role);
 
+    // Initialize wallet for the user
+    // Check if wallet exists, if not create it
+    const existingWallet = query("SELECT id FROM wallets WHERE user_id = $1", [newUser.id]);
+    if (existingWallet.length === 0) {
+      query(
+        "INSERT INTO wallets (user_id, ssp_balance, usd_balance) VALUES ($1, $2, $3)",
+        [newUser.id, 0, 0]
+      );
+    }
+
     return NextResponse.json(
-      { user: { id: newUser.id, email: newUser.email, full_name: newUser.full_name, role: newUser.role }, token },
+      { user: { id: newUser.id, email: newUser.email, full_name: newUser.full_name, role: newUser.role, default_currency: newUser.default_currency }, token },
       { status: 201 }
     );
   } catch (error) {
@@ -155,8 +164,8 @@ export async function signin(request: Request) {
       );
     }
 
-    // Note: password comparison using sha256 base64 (matching hash method)
-    const passwordValid = verifyPassword(password, user.password_hash);
+    // Note: password comparison using bcrypt (matching hash method)
+    const passwordValid = await verifyPassword(password, user.password_hash);
 
     if (!passwordValid) {
       return NextResponse.json(
@@ -168,11 +177,11 @@ export async function signin(request: Request) {
     // Generate JWT token
     const token = generateToken(user.id, user.role);
 
-    // Remove password_hash from response
+    // Remove password_hash from response, include currency info
     const { password_hash, ...userWithoutPassword } = user;
 
     return NextResponse.json(
-      { user: { id: userWithoutPassword.id, email: userWithoutPassword.email, full_name: userWithoutPassword.full_name, role: userWithoutPassword.role }, token },
+      { user: { id: userWithoutPassword.id, email: userWithoutPassword.email, full_name: userWithoutPassword.full_name, role: userWithoutPassword.role, default_currency: userWithoutPassword.default_currency }, token },
       { status: 200 }
     );
   } catch (error) {
@@ -184,7 +193,7 @@ export async function signin(request: Request) {
   }
 }
 
-// GET /api/auth/me - get current user info
+// GET /api/auth/me - get current user info with wallet balance
 export async function me(request: Request) {
   try {
     const authHeader = request.headers.get("authorization") || "";
@@ -206,11 +215,20 @@ export async function me(request: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // Get wallet balance
+    const walletResult = query("SELECT ssp_balance, usd_balance FROM wallets WHERE user_id = $1", [payload.userId]);
+    const walletBalance = walletResult.length > 0 ? walletResult[0] : { ssp_balance: 0, usd_balance: 0 };
+
     const { password_hash, ...userWithoutPassword } = user;
 
-    return NextResponse.json({ user: userWithoutPassword }, { status: 200 });
+    return NextResponse.json({ 
+      user: userWithoutPassword, 
+      wallet: { ssp_balance: walletBalance.ssp_balance, usd_balance: walletBalance.usd_balance } 
+    }, { status: 200 });
   } catch (error) {
     console.error("Get Me Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export { POST_signin as POST };
