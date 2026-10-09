@@ -1,121 +1,50 @@
-/* Gozaride Main Entry - Role-Aware Homepage */
-import { Inter } from "next/font/inter";
-import "../globals.css";
-import { useAuth } from "@/context/AuthContext";
+import Link from "next/link";
 
-const inter = Inter({ subsets: ["latin"] });
+export const metadata = { title: "Move Easy. Go Anywhere." };
+
+const SERVICES = [
+  { href: "/services/taxi", icon: "🚕", name: "Taxi rides", text: "Book a ride to anywhere in town with a verified driver." },
+  { href: "/services/motorcycle", icon: "🛵", name: "Motorcycle delivery", text: "Documents and small parcels, delivered fast." },
+  { href: "/services/package", icon: "📦", name: "Package delivery", text: "Send larger parcels with tracking from pickup to drop-off." },
+  { href: "/services/food", icon: "🍔", name: "Food delivery", text: "Meals from local restaurants, brought to your door." },
+  { href: "/services/rental", icon: "🚗", name: "Car rental", text: "Self-drive and with-driver rentals for any occasion." },
+  { href: "/services/bus", icon: "🚌", name: "Transport", text: "Shared transport routes across the city." },
+];
 
 export default function HomePage() {
-  const { user, isCustomer, isDriver, isShop, isAdmin, isLoading } = useAuth();
-
-  {/* Show loading state */}
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-  }
-
-  {/* Customer Homepage */}
-  if (isCustomer) {
-    return (
-      <div className={`${inter.className} min-h-screen bg-gradient-to-b from-blue-50 to-indigo-100 flex items-center justify-center p-6`}
-        style={{ minHeight: "100vh" }}>
-        <div className="max-w-7xl w-full text-center">
-          {/* Hero Header */}
-          <header className="mb-12">
-            <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-gray-900 mb-4">
-              Move Easy.<span className="text-orange-600">.</span> Go Anywhere.
-            </h1>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Your all-in-one mobility platform. From taxi rides to food delivery, we go everywhere you need.
-            </p>
-          </header>
-
-          {/* Services Grid - for customers */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-2xl mx-auto mb-8">
-            <a href="/services/taxi" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
-              <div className="text-4xl mb-3">🚕</div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">Taxi Rides</h3>
-              <p className="text-gray-500 line-clamp-2">Book rides instantly with real-time tracking and professional drivers.</p>
-            </a>
-
-            <a href="/services/motorcycle" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
-              <div className="text-4xl mb-3">🛵</div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">Motorcycle Delivery</h3>
-              <p className="text-gray-500 line-clamp-2">Fast and reliable delivery service for parcels and documents.</p>
-            </a>
-
-            <a href="/services/package" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
-              <div className="text-4xl mb-3">📦</div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">Package Delivery</h3>
-              <p className="text-gray-500 line-clamp-2">Secure parcel service nationwide with real-time tracking.</p>
-            </a>
-          </div>
-
-          {/* More Services for customers */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 max-w-2xl mx-auto">
-            <a href="/services/food" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
-              <div className="text-4xl mb-3">🍔</div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">Food Delivery</h3>
-              <p className="text-gray-500 line-clamp-2">Hot meals delivered from your favorite local restaurants.</p>
-            </a>
-
-            <a href="/services/rental" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
-              <div className="text-4xl mb-3">🚗</div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">Car Rental</h3>
-              <p className="text-gray-500 line-clamp-2">Rent a vehicle for any occasion - SUVs, sedans, and more.</p>
-            </a>
-
-            <a href="/services/bus" className="group rounded-3xl bg-white p-8 shadow-lg hover:shadow-2xl hover:transition-shadow duration-500 transform hover:-translate-y-1">
-              <div className="text-4xl mb-3">🚌</div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">Transport Services</h3>
-              <p className="text-gray-500 line-clamp-2">Public transit options and route planning for your journey.</p>
-            </a>
-          </div>
-
-          {/* User Greeting */}
-          {user && (
-            <div className="mt-8 p-6 rounded-2xl bg-gray-50 border border-gray-200 max-w-md mx-auto">
-              <h3 className="text-xl font-medium text-gray-900 mb-2">Welcome back, {user.name}!</h3>
-              <p className="text-gray-500 text-sm">
-                Choose a service above to get started or check your profile for options.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  {/* Driver Dashboard */}
-  if (isDriver) {
-    return null;
-  }
-
-  {/* Shop Owner Dashboard */}
-  if (isShop) {
-    return null;
-  }
-
-  {/* Admin Panel */}
-  if (isAdmin) {
-    return null;
-  }
-
-  {/* Default - landing page for unauthenticated users */}
   return (
-    <div className={`${inter.className} min-h-screen bg-gray-100 p-6`}
-      style={{ minHeight: "100vh" }}>
-      <div className="max-w-md w-full text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">Welcome to Gozaride</h1>
-        <p className="text-gray-600 mb-6">Move Easy. Go Anywhere.</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <a href="/signin" className="rounded-xl bg-orange-600 p-3 text-white hover:bg-orange-500 transition">
-            Sign In
-          </a>
-          <a href="/signup" className="rounded-border border-orange-500 p-3 text-orange-600 hover:bg-orange-50 transition">
-            Sign Up
-          </a>
+    <div>
+      <section className="bg-gradient-to-b from-orange-50 to-white px-4 py-20 text-center">
+        <h1 className="mx-auto max-w-3xl text-5xl font-bold tracking-tight md:text-6xl">
+          Move Easy. <span className="text-orange-600">Go Anywhere.</span>
+        </h1>
+        <p className="mx-auto mt-6 max-w-2xl text-lg text-gray-600">
+          One app for rides, deliveries, food and rentals across South Sudan.
+          Prices shown in US dollars and South Sudanese pounds.
+        </p>
+        <div className="mt-8 flex justify-center gap-3">
+          <Link href="/signup" className="rounded-xl bg-orange-600 px-6 py-3 font-medium text-white hover:bg-orange-700">
+            Get started
+          </Link>
+          <Link href="/services/taxi" className="rounded-xl border border-orange-600 px-6 py-3 font-medium text-orange-600 hover:bg-orange-50">
+            Book a ride
+          </Link>
         </div>
-      </div>
+      </section>
+
+      <section className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 py-16 sm:grid-cols-2 lg:grid-cols-3">
+        {SERVICES.map((s) => (
+          <Link
+            key={s.href}
+            href={s.href}
+            className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 transition hover:-translate-y-0.5 hover:shadow-lg"
+          >
+            <div className="text-4xl">{s.icon}</div>
+            <h2 className="mt-3 text-xl font-semibold">{s.name}</h2>
+            <p className="mt-2 text-gray-600">{s.text}</p>
+          </Link>
+        ))}
+      </section>
     </div>
   );
 }

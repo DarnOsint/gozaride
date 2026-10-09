@@ -1,72 +1,304 @@
-/* Driver Dashboard - Service Provider Interface */
-import { Inter } from "next/font/inter";
-import "../globals.css";
+"use client";
+
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { RequireRole } from "@/components/RequireRole";
 import { useAuth } from "@/context/AuthContext";
+import { api, ApiError, money, ssp } from "@/lib/client";
 
-const inter = Inter({ subsets: ["latin"] });
+type Trip = {
+  id: string;
+  service_type: string;
+  status: "pending" | "accepted" | "in_progress" | "completed" | "cancelled";
+  origin_name: string | null;
+  dest_name: string | null;
+  distance_km: number;
+  eta_minutes: number;
+  fare_usd: number;
+  fare_ssp: number;
+  driver_earnings_usd: number;
+  driver_earnings_ssp: number;
+  requested_at: string;
+  accepted_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};
 
-export default function DriverDashboard() {
-  const { isDriver, user } = useAuth();
+type Earnings = {
+  total_usd: number;
+  total_ssp: number;
+  this_week_usd: number;
+  this_week_ssp: number;
+};
 
-  if (!isDriver) {
-    return null;
+function DriverDashboard({ token }: { token: string }) {
+  const [online, setOnline] = useState(false);
+  const [loadingOnline, setLoadingOnline] = useState(true);
+  const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
+  const [openTrips, setOpenTrips] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
+  const [earnings, setEarnings] = useState<Earnings | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const loadOnline = useCallback(async () => {
+    try {
+      const res = await api<{ availability: { is_online: boolean } }>("/api/driver/availability", { token });
+      setOnline(res.availability.is_online);
+    } catch {
+      setOnline(false);
+    } finally {
+      setLoadingOnline(false);
+    }
+  }, [token]);
+
+  const loadOpen = useCallback(async () => {
+    try {
+      const data = await api<any[]>("/api/trips/available", { token });
+      setOpenTrips(data);
+    } catch {
+      setOpenTrips([]);
+    }
+  }, [token]);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const data = await api<{ trips: any[] }>("/api/trips?status=completed&limit=20", { token });
+      setHistory(data.trips);
+    } catch {
+      setHistory([]);
+    }
+  }, [token]);
+
+  const loadEarnings = useCallback(async () => {
+    try {
+      const data = await api<{ earnings: { total_usd: number; total_ssp: number; this_week_usd: number; this_week_ssp: number } }>("/api/driver/earnings", { token });
+      setEarnings(data.earnings);
+    } catch {
+      setEarnings(null);
+    }
+  }, [token]);
+
+  const loadActive = useCallback(async () => {
+    try {
+      const data = await api<{ trips: any[] }>("/api/trips?status=accepted,in_progress&limit=1", { token });
+      if (data.trips.length > 0) setActiveTrip(data.trips[0]);
+    } catch {
+      setActiveTrip(null);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadOnline();
+    loadHistory();
+    loadEarnings();
+  }, [loadOnline, loadHistory, loadEarnings]);
+
+  useEffect(() => {
+    if (online) {
+      loadOpen();
+      loadActive();
+      const interval = setInterval(() => { loadOpen(); loadActive(); }, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [online, loadOpen, loadActive]);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, []);
+
+  const reportLocation = useCallback(async () => {
+    if (!location) return;
+    try {
+      await api("/api/driver/location", { token, body: location });
+    } catch {}
+  }, [token, location]);
+
+  useEffect(() => {
+    if (!online || !location) return;
+    const id = setInterval(reportLocation, 15000);
+    return () => clearInterval(id);
+  }, [online, location, reportLocation]);
+
+  async function toggleOnline(next: boolean) {
+    if (busy) return;
+    setBusy("online");
+    try {
+      await api("/api/driver/availability", { token, body: { is_online: next } });
+      setOnline(next);
+      if (next) loadOpen();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not change status");
+    } finally {
+      setBusy(null);
+    }
   }
 
+  async function acceptTrip(id: string) {
+    try {
+      await api(`/api/trips/${id}/accept`, { token, method: "POST" });
+      setOnline(false);
+      loadActive();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not accept trip");
+    }
+  }
+
+  async function startTrip(id: string) {
+    try {
+      await api(`/api/trips/${id}/start`, { token, method: "POST" });
+      loadActive();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not start trip");
+    }
+  }
+
+  async function completeTrip(id: string) {
+    try {
+      await api(`/api/trips/${id}/complete`, { token, method: "POST" });
+      setActiveTrip(null);
+      loadHistory();
+      loadEarnings();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not complete trip");
+    }
+  }
+
+  const actionBtn = "rounded-xl bg-orange-600 px-4 py-2 font-medium text-white hover:bg-orange-700";
+  const secondaryBtn = "rounded-xl border border-gray-300 px-4 py-2 font-medium hover:bg-gray-50";
+
   return (
-    <div className={`${inter.className} min-h-screen bg-gray-50 p-6`}
-      style={{ minHeight: "100vh" }}>
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Driver Dashboard - Welcome, {user?.name || "Driver"}
-        </h1>
-        <p className="text-gray-600">Manage your rides and earnings</p>
-      </header>
+    <div className="mx-auto max-w-5xl px-4 py-8">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Driver Dashboard</h1>
+        <button
+          onClick={() => toggleOnline(!online)}
+          disabled={busy === "online"}
+          className={online ? "rounded-xl bg-gray-900 px-4 py-2 text-white" : actionBtn}
+        >
+          {busy === "online" ? "Changing..." : online ? "Go Offline" : "Go Online"}
+        </button>
+      </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <div className="text-3xl text-orange-600 mb-2">💰</div>
-          <div className="font-semibold text-gray-900">Earnings This Week</div>
-          <div className="text-2xl font-bold text-orange-600">$2,450</div>
+      <div className="grid gap-6 md:grid-cols-3 mb-8">
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-gray-200">
+          <p className="text-sm text-gray-600">Total earnings</p>
+          <p className="text-3xl font-bold mt-1">{money(earnings?.total_usd ?? 0)}</p>
+          <p className="text-sm text-gray-500">{ssp(earnings?.total_ssp ?? 0)}</p>
         </div>
-
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <div className="text-3xl text-green-500 mb-2">📊</div>
-          <div className="font-semibold text-gray-900">Completed Rides</div>
-          <div className="text-2xl font-bold text-green-500">47</div>
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-gray-200">
+          <p className="text-sm text-gray-600">This week</p>
+          <p className="text-3xl font-bold mt-1">{money(earnings?.this_week_usd ?? 0)}</p>
+          <p className="text-sm text-gray-500">{ssp(earnings?.this_week_ssp ?? 0)}</p>
         </div>
-
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <div className="text-3xl text-blue-500 mb-2">👥</div>
-          <div className="font-semibold text-gray-900">Active Trips</div>
-          <div className="text-2xl font-bold text-blue-500">3</div>
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-gray-200">
+          <p className="text-sm text-gray-600">Status</p>
+          <p className="text-3xl font-bold mt-1">{online ? "Online" : "Offline"}</p>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <a href="/driver/accept-rides" className="group rounded-2xl bg-orange-600 p-6 text-white shadow hover:shadow-2xl transition">
-          <div className="text-3xl mb-2">📱</div>
-          <h3 className="font-semibold">Accept New Ride</h3>
-          <p className="text-gray-100 mt-1">Get matched with passengers</p>
-        </a>
-
-        <a href="/driver/earnings" className="group rounded-2xl bg-blue-600 p-6 text-white shadow hover:shadow-2xl transition">
-          <div className="text-3xl mb-2">💵</div>
-          <h3 className="font-semibold">Earnings</h3>
-          <p className="text-gray-100 mt-1">View your earnings history</p>
-        </a>
-      </div>
-
-      {/* Recent Rides */}
-      <div className="mt-8 rounded-2xl bg-white p-6 shadow">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Trips</h2>
-        <div className="space-y-4">
-          <div className="p-4 rounded bg-gray-50">
-            <p className="text-sm text-gray-500">No trips yet - start accepting rides</p>
+      {online && (
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold">Available trips</h2>
+            <span className="text-sm text-gray-500">Updates every 15s</span>
           </div>
-        </div>
-      </div>
+          <ul className="space-y-3">
+            {openTrips.length === 0 && <p className="text-gray-500">No requests nearby.</p>}
+            {openTrips.map((t) => (
+              <li key={t.id} className="rounded-xl bg-white p-4 ring-1 ring-gray-200 flex items-center justify-between">
+                <div>
+                  <p className="font-medium">{t.service_type.toUpperCase()}</p>
+                  <p className="text-sm text-gray-600">
+                    {t.origin_name ?? "Pickup"} → {t.dest_name ?? "Drop-off"}
+                    · {t.distance_km?.toFixed(1)} km · ~{t.eta_minutes} min
+                  </p>
+                  <p className="text-sm text-orange-600 font-medium">
+                    {money(t.fare_usd)} · {ssp(t.fare_ssp)}
+                  </p>
+                  {t.pickup_distance_km !== null && (
+                    <p className="text-xs text-gray-500">{t.pickup_distance_km} km to pickup</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => acceptTrip(t.id)}
+                  className={actionBtn}
+                  disabled={busy === `accept-${t.id}`}
+                >
+                  Accept
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {activeTrip && (
+        <section className="mb-8 rounded-2xl bg-orange-50 p-6 ring-1 ring-orange-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold">Active trip</h2>
+              <p className="text-sm text-gray-600">
+                {activeTrip.origin_name} → {activeTrip.dest_name} · {activeTrip.distance_km} km
+              </p>
+            </div>
+            <div className="flex gap-3">
+              {activeTrip.status === "accepted" && (
+                <button onClick={() => startTrip(activeTrip.id)} className={actionBtn}>
+                  Start trip
+                </button>
+              )}
+              {activeTrip.status === "in_progress" && (
+                <button onClick={() => completeTrip(activeTrip.id)} className="rounded-xl bg-green-600 px-4 py-2 text-white font-medium hover:bg-green-700">
+                  Complete
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section>
+        <h2 className="text-xl font-bold mb-4">Completed trips</h2>
+        <ul className="space-y-3">
+          {history.length === 0 && <p className="text-gray-500">No completed trips yet.</p>}
+          {history.map((t) => (
+            <li key={t.id} className="rounded-xl bg-white p-4 ring-1 ring-gray-200 flex items-center justify-between">
+              <div>
+                <p className="font-medium">{t.service_type?.toUpperCase()}</p>
+                <p className="text-sm text-gray-600">
+                  {t.origin_name} → {t.dest_name} · {t.distance_km} km
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold">{money(t.fare_usd)}</span>
+                  <span className="text-gray-500"> · {ssp(t.fare_ssp)}</span>
+                </p>
+              </div>
+              <p className="text-sm text-gray-500">
+                {money(t.driver_earnings_usd)} · {ssp(t.driver_earnings_ssp)}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
+  );
+}
+
+export default function DriverPage() {
+  const { token } = useAuth();
+  return (
+    <RequireRole roles={["driver"]}>
+      {() => (
+        <Suspense fallback={<p className="p-8">Loading...</p>}>
+          <DriverDashboard token={token!} />
+        </Suspense>
+      )}
+    </RequireRole>
   );
 }

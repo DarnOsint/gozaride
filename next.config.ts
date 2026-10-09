@@ -1,26 +1,23 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  experimental: {
-    appDir: true,
-    turboAuth: true,
-  },
-  images: {
-    domains: ['localhost', '127.0.0.1'],
-    remotePatterns: [
+const nextConfig = {
+  poweredByHeader: false,
+  reactStrictMode: true,
+  // Disable Turbopack entirely due to native addon incompatibility with Tailwind v4
+  turbopack: false,
+  output: "standalone",
+  async headers() {
+    return [
       {
-        protocol: 'https',
-        hostname: '**',
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "geolocation=(self)" },
+        ],
       },
-    ],
-  },
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.alias.canvas = false;
-      config.resolve.alias['react-dom/lib/ReactCurrentDispatcher'] = false;
-      config.resolve.alias['scheduler/tracing'] = false;
-    }
-    return config;
+    ];
   },
 };
 

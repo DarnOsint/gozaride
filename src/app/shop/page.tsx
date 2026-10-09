@@ -1,95 +1,107 @@
-/* Shop Owner Dashboard - Business Interface */
-import { Inter } from "next/font/inter";
-import "../globals.css";
+"use client";
+
+import { useEffect, useState } from "react";
+import { RequireRole } from "@/components/RequireRole";
 import { useAuth } from "@/context/AuthContext";
+import { api, ApiError, money, ssp } from "@/lib/client";
 
-const inter = Inter({ subsets: ["latin"] });
+type Order = {
+  id: string;
+  service_type: string;
+  status: string;
+  origin_name: string | null;
+  dest_name: string | null;
+  distance_km: number;
+  final_fare: number;
+  final_fare_ssp: number;
+  final_fare_usd: number;
+  currency_used: string;
+  requested_at: string;
+  accepted_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};
 
-export default function ShopDashboard() {
-  const { isShop, user } = useAuth();
+function ShopDashboard({ token }: { token: string }) {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [stats, setStats] = useState({
+    today: 0,
+    revenue_usd: 0,
+    revenue_ssp: 0,
+  });
 
-  if (!isShop) {
-    return null;
+  async function load() {
+    try {
+      const [ordersRes, statsRes] = await Promise.all([
+        api<Order[]>("/api/shop/orders", { token }),
+        api<{ today: number; revenue_usd: number; revenue_ssp: number }>("/api/shop/stats", { token }),
+      ]);
+      setOrders(ordersRes);
+      setStats(statsRes);
+    } catch (e) {
+      console.error(e);
+    }
   }
 
+  useEffect(() => { load(); }, [token]);
+
   return (
-    <div className={`${inter.className} min-h-screen bg-gray-50 p-6`}
-      style={{ minHeight: "100vh" }}>
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Shop Dashboard - Welcome, {user?.name || "Business"}
-        </h1>
-        <p className="text-gray-600">Manage orders and products</p>
-      </header>
+    <div className="mx-auto max-w-5xl px-4 py-8">
+      <h1 className="text-2xl font-bold mb-6">Shop Dashboard</h1>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <div className="text-3xl text-green-500 mb-2">📦</div>
-          <div className="font-semibold text-gray-900">Active Orders</div>
-          <div className="text-2xl font-bold text-green-500">12</div>
+      <div className="grid gap-6 md:grid-cols-3 mb-8">
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-gray-200">
+          <p className="text-sm text-gray-600">Orders today</p>
+          <p className="text-3xl font-bold mt-1">{stats.today}</p>
         </div>
-
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <div className="text-3xl text-orange-500 mb-2">💵</div>
-          <div className="font-semibold text-gray-900">Revenue This Month</div>
-          <div className="text-2xl font-bold text-orange-500">$3,850</div>
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-gray-200">
+          <p className="text-sm text-gray-600">Revenue (USD)</p>
+          <p className="text-3xl font-bold mt-1">{money(stats.revenue_usd)}</p>
         </div>
-
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <div className="text-3xl text-purple-600 mb-2">🛒</div>
-          <div className="font-semibold text-gray-900">Products Listed</div>
-          <div className="text-2xl font-bold text-purple-600">24</div>
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-gray-200">
+          <p className="text-sm text-gray-600">Revenue (SSP)</p>
+          <p className="text-3xl font-bold mt-1">{ssp(stats.revenue_ssp)}</p>
         </div>
       </div>
 
-      {/* Order Management */}
-      <div className="grid grid-cols-1 gap-6 mb-8">
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Orders</h2>
-          <div className="space-y-3">
-            <div className="p-3 rounded border border-gray-200">
-              <p className="text-sm text-gray-600">Order #1025 - Food delivery</p>
-              <p className="text-xs text-gray-500">20 min ago</p>
-              <span className="text-green-500 font-medium">Confirmed</span>
-            </div>
-            <div className="p-3 rounded border border-gray-200">
-              <p className="text-sm text-gray-600">Order #1024 - Package delivery</p>
-              <p className="text-xs text-gray-500">1 hour ago</p>
-              <span className="text-orange-500 font-medium">Processing</span>
-            </div>
-          </div>
-        </div>
+      <section>
+        <h2 className="text-xl font-bold mb-4">Recent orders</h2>
+        <ul className="space-y-3">
+          {orders.length === 0 && <p className="text-gray-500">No orders yet.</p>}
+          {orders.map((o) => (
+            <li key={o.id} className="rounded-xl bg-white p-4 ring-1 ring-gray-200 flex items-center justify-between">
+              <div>
+                <p className="font-medium">{o.service_type.toUpperCase()}</p>
+                <p className="text-sm text-gray-600">
+                  {o.origin_name ?? "Pickup"} → {o.dest_name ?? "Drop-off"} · {o.distance_km} km
+                </p>
+                <p className="text-sm text-gray-500 capitalize">{o.status.replace("_", " ")}</p>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold">{money(o.final_fare_usd)}</p>
+                <p className="text-sm text-gray-500">{ssp(o.final_fare_ssp)}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
 
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Product Catalog</h2>
-          <p className="text-sm text-gray-500">Manage your products and services</p>
-          <a href="/shop/products" className="text-orange-600 hover:text-orange-500 mt-2 underline">
-            View/Manage Products
-          </a>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <a href="/shop/products" className="rounded-2xl bg-white p-6 shadow hover:shadow-lg transition">
-          <div className="text-2xl mb-2">🛒</div>
-          <h3 className="font-medium">Products</h3>
-          <p className="text-gray-500 text-sm">Manage your offerings</p>
-        </a>
-
-        <a href="#" className="rounded-2xl bg-white p-6 shadow hover:shadow-lg transition">
-          <div className="text-2xl mb-2">📊</div>
-          <h3 className="font-medium">Analytics</h3>
-          <p className="text-gray-500 text-sm">View performance</p>
-        </a>
-
-        <a href="/profile" className="rounded-2xl bg-white p-6 shadow hover:shadow-lg transition">
-          <div className="text-2xl mb-2">👤</div>
-          <h3 className="font-medium">Profile</h3>
-          <p className="text-gray-500 text-sm">Account settings</p>
-        </a>
-      </div>
+      <section className="mt-12">
+        <h2 className="text-xl font-bold mb-4">Note</h2>
+        <p className="text-gray-600">
+          Shop dashboard is a work in progress. Order creation, product catalogue,
+          scheduled deliveries, and inventory management will be added next.
+        </p>
+      </section>
     </div>
+  );
+}
+
+export default function ShopPage() {
+  const { token } = useAuth();
+  return (
+    <RequireRole roles={["shop"]}>
+      {() => <ShopDashboard token={token!} />}
+    </RequireRole>
   );
 }

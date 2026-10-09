@@ -1,259 +1,109 @@
-/* Gozaride - Enhanced PostgreSQL Schema with SSP/USD Currency */
--- ===== EXTENSIONS =====
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Gozaride database schema, version 1.
+--
+-- Safe to run repeatedly: every statement is idempotent and nothing is dropped.
+-- Money: fares are stored in USD (canonical). Each trip also stores the
+-- SSP-per-USD rate in force when it was priced, so historical SSP amounts
+-- never change when an admin updates the rate.
 
--- ===== ENUMS =====
-CREATE TYPE user_role AS ENUM ('customer', 'driver', 'shop', 'admin');
-CREATE TYPE trip_status AS ENUM ('pending', 'accepted', 'in_progress', 'completed', 'cancelled');
-CREATE TYPE trip_type AS ENUM ('taxi', 'motorcycle', 'package', 'food', 'rental', 'bus');
-CREATE TYPE payment_status AS ENUM ('pending', 'processing', 'completed', 'failed', 'refunded');
-CREATE TYPE payment_method AS ENUM ('card', 'wallet', 'cash', 'transfer', 'ssp', 'usd');
-CREATE TYPE currency_type AS ENUM ('ssp', 'usd');
-CREATE TYPE wallet_type AS ENUM ('credit', 'deposit', 'earnings', 'balance');
+CREATE EXTENSION IF NOT EXISTS pgcrypto;  -- gen_random_uuid() on older Postgres
 
--- ===== TABLE: users (extended with currency) =====
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  email VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  full_name VARCHAR(100) NOT NULL,
-  phone VARCHAR(20),
-  role user_role NOT NULL DEFAULT 'customer',
-  email_verified BOOLEAN DEFAULT FALSE,
-  -- Currency preferences
-  default_currency currency_type DEFAULT 'usd',
-  -- Wallet info
-  wallet_balance_ssp DECIMAL(12, 2) DEFAULT 0,
-  wallet_balance_usd DECIMAL(10, 2) DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+-- ---------------------------------------------------------------- users
+CREATE TABLE IF NOT EXISTS users (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email            text NOT NULL UNIQUE CHECK (email = lower(email)),
+  password_hash    text NOT NULL,
+  full_name        text NOT NULL CHECK (char_length(full_name) BETWEEN 2 AND 100),
+  phone            text CHECK (phone IS NULL OR char_length(phone) BETWEEN 6 AND 20),
+  role             text NOT NULL CHECK (role IN ('customer', 'driver', 'shop', 'admin')),
+  default_currency text NOT NULL DEFAULT 'usd' CHECK (default_currency IN ('usd', 'ssp')),
+  is_active        boolean NOT NULL DEFAULT true,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  last_login_at    timestamptz
 );
 
--- ===== INDEXES for users =====
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_role ON users(role);
-CREATE INDEX idx_users_default_currency ON users(default_currency);
-CREATE INDEX idx_users_created_at ON users(created_at);
+CREATE INDEX IF NOT EXISTS users_role_idx ON users (role);
 
--- ===== TABLE: currency_rates (admin-set exchange rates) =====
-CREATE TABLE currency_rates (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  from_currency currency_type NOT NULL,
-  to_currency currency_type NOT NULL,
-  rate DECIMAL(15, 4) NOT NULL, -- 1 from_currency = rate to_currency
-  is_active BOOLEAN DEFAULT TRUE,
-  set_by_admin UUID REFERENCES users(id),
-  set_at TIMESTAMPTZ DEFAULT NOW(),
-  valid_from TIMESTAMPTZ DEFAULT NOW(),
-  valid_until TIMESTAMPTZ
+-- ------------------------------------------------------- driver profiles
+CREATE TABLE IF NOT EXISTS driver_profiles (
+  user_id              uuid PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  vehicle_type         text,
+  plate_number         text,
+  is_online            boolean NOT NULL DEFAULT false,
+  latitude             double precision CHECK (latitude BETWEEN -90 AND 90),
+  longitude            double precision CHECK (longitude BETWEEN -180 AND 180),
+  location_updated_at  timestamptz,
+  rating_avg           numeric(3, 2) NOT NULL DEFAULT 0,
+  rating_count         integer NOT NULL DEFAULT 0
 );
 
--- ===== INDEXES for currency_rates =====
-CREATE INDEX idx_currency_rates_from_to ON currency_rates(from_currency, to_currency);
-CREATE INDEX idx_currency_rates_active ON currency_rates(is_active);
+CREATE INDEX IF NOT EXISTS driver_online_idx ON driver_profiles (is_online);
 
--- ===== DEFAULT RATE INSERTION =====
-INSERT INTO currency_rates (from_currency, to_currency, rate, set_by_admin, set_at, valid_from, valid_until)
-VALUES ('ssd', 'usd', 0.056::decimal(15,4), NULL, NOW(), NOW(), NULL),
-       ('usd', 'ssd', 17.86::decimal(15,4), NULL, NOW(), NOW(), NULL),
-       ('ssd', 'ssd', 1.0000::decimal(15,4), NULL, NOW(), NOW(), NULL),
-       ('usd', 'usd', 1.0000::decimal(15,4), NULL, NOW(), NOW(), NULL);
-
--- ===== TABLE: wallets (detailed wallet tracking) =====
-CREATE TABLE wallets (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
-  ssp_balance DECIMAL(12, 2) DEFAULT 0,
-  usd_balance DECIMAL(10, 2) DEFAULT 0,
-  total_deposited_ssp DECIMAL(12, 2) DEFAULT 0,
-  total_deposited_usd DECIMAL(10, 2) DEFAULT 0,
-  total_withdrawn_ssp DECIMAL(12, 2) DEFAULT 0,
-  total_withdrawn_usd DECIMAL(10, 2) DEFAULT 0,
-  bonus_ssp DECIMAL(12, 2) DEFAULT 0,
-  bonus_usd DECIMAL(10, 2) DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+-- -------------------------------------------------- exchange rate history
+-- Admin-set. The current rate is the newest row. There is no seed row:
+-- until an admin sets a rate, trips cannot be priced.
+CREATE TABLE IF NOT EXISTS currency_rates (
+  id           bigserial PRIMARY KEY,
+  ssp_per_usd  numeric(14, 4) NOT NULL CHECK (ssp_per_usd > 0),
+  set_by       uuid REFERENCES users (id),
+  set_at       timestamptz NOT NULL DEFAULT now(),
+  note         text CHECK (note IS NULL OR char_length(note) <= 300)
 );
 
--- ===== INDEXES for wallets =====
-CREATE INDEX idx_wallets_user_id ON wallets(user_id);
+CREATE INDEX IF NOT EXISTS currency_rates_latest_idx ON currency_rates (set_at DESC);
 
--- ===== TABLE: transactions (all wallet/ payment transactions) =====
-CREATE TABLE transactions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  wallet_id UUID REFERENCES wallets(id) ON DELETE SET NULL,
-  user_id UUID REFERENCES users(id) ON DELETE RESTRICT NOT NULL,
-  trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
-  type transaction_type NOT NULL, -- 'deposit', 'withdrawal', 'trip_payment', 'commission', 'bonus', 'refund'
-  amount_ssp DECIMAL(12, 2) NOT NULL,
-  amount_usd DECIMAL(10, 2) NOT NULL,
-  currency_used currency_type NOT NULL,
-  status payment_status DEFAULT 'pending',
-  description TEXT,
-  reference_id UUID, -- trip_id, referral_id, etc.
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+-- ----------------------------------------------------------------- trips
+CREATE TABLE IF NOT EXISTS trips (
+  id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id                 uuid NOT NULL REFERENCES users (id),
+  driver_id                   uuid REFERENCES users (id),
+  service_type                text NOT NULL CHECK (service_type IN ('taxi', 'motorcycle', 'package', 'food', 'rental', 'bus')),
+  status                      text NOT NULL DEFAULT 'pending'
+                                CHECK (status IN ('pending', 'accepted', 'in_progress', 'completed', 'cancelled')),
+  origin_name                 text CHECK (origin_name IS NULL OR char_length(origin_name) <= 200),
+  origin_lat                  double precision NOT NULL CHECK (origin_lat BETWEEN -90 AND 90),
+  origin_lng                  double precision NOT NULL CHECK (origin_lng BETWEEN -180 AND 180),
+  dest_name                   text CHECK (dest_name IS NULL OR char_length(dest_name) <= 200),
+  dest_lat                    double precision NOT NULL CHECK (dest_lat BETWEEN -90 AND 90),
+  dest_lng                    double precision NOT NULL CHECK (dest_lng BETWEEN -180 AND 180),
+  distance_km                 numeric(8, 2) NOT NULL CHECK (distance_km >= 0),
+  eta_minutes                 integer NOT NULL CHECK (eta_minutes >= 0),
+  fare_usd                    numeric(10, 2) NOT NULL CHECK (fare_usd >= 0),
+  exchange_rate_ssp_per_usd   numeric(14, 4) NOT NULL CHECK (exchange_rate_ssp_per_usd > 0),
+  commission_rate             numeric(4, 3) NOT NULL DEFAULT 0.200 CHECK (commission_rate BETWEEN 0 AND 1),
+  requested_at                timestamptz NOT NULL DEFAULT now(),
+  accepted_at                 timestamptz,
+  started_at                  timestamptz,
+  completed_at                timestamptz,
+  cancelled_at                timestamptz,
+  cancel_reason               text CHECK (cancel_reason IS NULL OR char_length(cancel_reason) <= 300),
+  CONSTRAINT trips_pending_has_no_driver CHECK (status <> 'pending' OR driver_id IS NULL),
+  CONSTRAINT trips_active_has_driver CHECK (status NOT IN ('accepted', 'in_progress', 'completed') OR driver_id IS NOT NULL)
 );
 
--- ===== INDEXES for transactions =====
-CREATE INDEX idx_transactions_wallet_id ON transactions(wallet_id);
-CREATE INDEX idx_transactions_user_id ON transactions(user_id);
-CREATE INDEX idx_transactions_trip_id ON transactions(trip_id);
-CREATE INDEX idx_transactions_type ON transactions(type);
-CREATE INDEX idx_transactions_created_at ON transactions(created_at DESC);
+CREATE INDEX IF NOT EXISTS trips_customer_idx ON trips (customer_id, requested_at DESC);
+CREATE INDEX IF NOT EXISTS trips_driver_idx ON trips (driver_id, status);
+CREATE INDEX IF NOT EXISTS trips_open_idx ON trips (service_type, requested_at) WHERE status = 'pending';
 
--- ===== TABLE: transaction_types (enum values) =====
-CREATE TYPE transaction_type AS ENUM ('deposit', 'withdrawal', 'trip_payment', 'commission', 'bonus', 'refund', 'referral_reward');
-
--- ===== TABLE: reviews_ratings (enhanced) =====
-CREATE TABLE reviews_ratings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  reviewer_id UUID REFERENCES users(id) ON DELETE RESTRICT,
-  reviewee_id UUID REFERENCES users(id) ON DELETE RESTRICT NOT NULL,
-  trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
-  rating DECIMAL(3, 2) NOT NULL, -- 1.0 to 5.0
-  title VARCHAR(100),
-  review TEXT,
-  -- Currency of any monetary feedback
-  amount_ssp DECIMAL(12, 2) DEFAULT 0,
-  amount_usd DECIMAL(10, 2) DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  
-  CONSTRAINT chk_rating_check CHECK (rating >= 1 AND rating <= 5)
+-- Live GPS samples while a trip is in progress.
+CREATE TABLE IF NOT EXISTS trip_locations (
+  id           bigserial PRIMARY KEY,
+  trip_id      uuid NOT NULL REFERENCES trips (id) ON DELETE CASCADE,
+  driver_id    uuid NOT NULL REFERENCES users (id),
+  latitude     double precision NOT NULL CHECK (latitude BETWEEN -90 AND 90),
+  longitude    double precision NOT NULL CHECK (longitude BETWEEN -180 AND 180),
+  recorded_at  timestamptz NOT NULL DEFAULT now()
 );
 
--- ===== INDEXES for reviews_ratings =====
-CREATE INDEX idx_reviews_ratings_reviewer ON reviews_ratings(reviewer_id);
-CREATE INDEX idx_reviews_ratings_reviewee ON reviews_ratings(reviewee_id);
-CREATE INDEX idx_reviews_ratings_trip ON reviews_ratings(trip_id);
-CREATE INDEX idx_reviews_ratings_rating ON reviews_ratings(rating);
+CREATE INDEX IF NOT EXISTS trip_locations_trip_idx ON trip_locations (trip_id, recorded_at DESC);
 
--- ===== TABLE: referral_codes =====
-CREATE TABLE referral_codes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
-  code VARCHAR(20) UNIQUE NOT NULL,
-  uses INTEGER DEFAULT 0,
-  max_uses INTEGER,
-  reward_ssp DECIMAL(12, 2) DEFAULT 0,
-  reward_usd DECIMAL(10, 2) DEFAULT 0,
-  is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  used_by UUID REFERENCES users(id),
-  used_at TIMESTAMPTZ
+-- ---------------------------------------------------------------- ratings
+CREATE TABLE IF NOT EXISTS ratings (
+  id          bigserial PRIMARY KEY,
+  trip_id     uuid NOT NULL REFERENCES trips (id) ON DELETE CASCADE,
+  rater_id    uuid NOT NULL REFERENCES users (id),
+  ratee_id    uuid NOT NULL REFERENCES users (id),
+  stars       smallint NOT NULL CHECK (stars BETWEEN 1 AND 5),
+  comment     text CHECK (comment IS NULL OR char_length(comment) <= 500),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (trip_id, rater_id)
 );
-
--- ===== INDEXES for referral_codes =====
-CREATE INDEX idx_referral_codes_user_id ON referral_codes(user_id);
-CREATE INDEX idx_referral_codes_code ON referral_codes(code);
-CREATE INDEX idx_referral_codes_active ON referral_codes(is_active);
-
--- ===== TABLE: earnings_history (driver earnings breakdown) =====
-CREATE TABLE earnings_history (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  driver_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
-  trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
-  amount_ssp DECIMAL(12, 2) NOT NULL,
-  amount_usd DECIMAL(10, 2) NOT NULL,
-  commission_ssp DECIMAL(12, 2) DEFAULT 0,
-  commission_usd DECIMAL(10, 2) DEFAULT 0,
-  net_earnings_ssp DECIMAL(12, 2) NOT NULL,
-    net_earnings_usd DECIMAL(10, 2) NOT NULL,
-  trip_status trip_status NOT NULL,
-  paid_at TIMESTAMPTZ DEFAULT NOW(),
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- ===== INDEXES for earnings_history =====
-CREATE INDEX idx_earnings_history_driver_id ON earnings_history(driver_id);
-CREATE INDEX idx_earnings_history_trip_id ON earnings_history(trip_id);
-CREATE INDEX idx_earnings_history_paid_at ON earnings_history(paid_at);
-
--- ===== TABLE: platform_settings (enhanced) =====
-CREATE TABLE platform_settings (
-  key VARCHAR(50) PRIMARY KEY,
-  value JSONB NOT NULL,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- ===== DEFAULT SETTINGS =====
-INSERT INTO platform_settings (key, value) VALUES
-  ('commission_rate', '0.20'::jsonb),
-  ('surge_multiplier_threshold', '2.0'::jsonb),
-  ('min_rating_to_drive', '4.0'::jsonb),
-  ('default_distance_rate', '1.50'::jsonb), -- per km in USD
-  ('default_waiting_rate', '0.50'::jsonb), -- per minute in USD
-  ('currency', '{"ssd": "SSP", "usd": "USD", "default": "usd"}'::jsonb),
-  ('exchange_rate_ssd_to_usd', '0.056'::jsonb),
-  ('exchange_rate_usd_to_ssd', '17.86'::jsonb);
-
--- ===== VIEWS =====
-
--- ===== Active Trips Summary (with currency) =====
-CREATE OR REPLACE VIEW active_trips_summary AS
-SELECT 
-  t.id,
-  t.type,
-  t.status,
-  t.estimated_duration,
-  t.estimated_distance,
-  t.base_fare,
-  t.final_fare,
-  t.currency_used,
-  t.final_fare_ssp,
-  t.final_fare_usd,
-  u.full_name AS customer_name,
-  u2.full_name AS driver_name,
-  dp.current_latitude AS driver_lat,
-  dp.current_longitude AS driver_lon
-FROM trips t
-JOIN users u ON t.customer_id = u.id
-LEFT JOIN users u2 ON t.driver_id = u2.id
-LEFT JOIN driver_profiles dp ON u2.id = dp.user_id
-WHERE t.status IN ('pending', 'accepted', 'in_progress');
-
--- ===== Driver Dashboard View (with earnings in both currencies) =====
-CREATE OR REPLACE VIEW driver_dashboard_view AS
-SELECT 
-  dp.*,
-  u.email,
-  u.full_name,
-  (SELECT COALESCE(SUM(net_earnings_ssp), 0) FROM earnings_history WHERE driver_id = dp.user_id AND status = 'completed') AS total_earnings_ssd,
-  (SELECT COALESCE(SUM(net_earnings_usd), 0) FROM earnings_history WHERE driver_id = dp.user_id AND status = 'completed') AS total_earnings_usd,
-  (SELECT COUNT(*) FROM trips WHERE driver_id = dp.user_id AND status = 'completed') AS completed_rides,
-  (SELECT COUNT(*) FROM trips WHERE driver_id = dp.user_id AND status = 'accepted') AS active_rides
-FROM driver_profiles dp
-JOIN users u ON dp.user_id = u.id;
-
--- ===== Customer Wallet View =====
-CREATE OR REPLACE VIEW customer_wallet_view AS
-SELECT 
-  w.id,
-  u.full_name,
-  u.email,
-  w.ssp_balance,
-  w.usd_balance,
-  w.total_deposited_ssp,
-  w.total_deposited_usd,
-  w.total_withdrawn_ssp,
-  w.total_withdrawn_usd
-FROM wallets w
-JOIN users u ON w.user_id = u.id;
-
--- ===== Recent Transactions View =====
-CREATE OR REPLACE VIEW recent_transactions_view AS
-SELECT 
-  t.id,
-  t.type,
-  t.amount_ssp,
-  t.amount_usd,
-  t.currency_used,
-  t.status,
-  t.description,
-  t.created_at,
-  u.full_name AS user_full_name
-FROM transactions t
-JOIN users u ON t.user_id = u.id
-ORDER BY t.created_at DESC
-LIMIT 50;
