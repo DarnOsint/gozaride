@@ -1,0 +1,71 @@
+name: CI
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  quality:
+    name: Lint, typecheck, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx eslint
+      - run: npx tsc --noEmit
+      - run: npm run build
+
+  e2e:
+    name: Runtime smoke tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gozaride
+          POSTGRES_PASSWORD: gozaride
+          POSTGRES_DB: gozaride_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gozaride"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://gozaride:gozaride@localhost:5432/gozaride_test
+      JWT_SECRET: ci-test-secret-that-is-long-enough-32c
+      SIGNUP_LIMIT_PER_HOUR: "1000"
+      ADMIN_EMAIL: admin@gozaride.test
+      ADMIN_PASSWORD: local-admin-password-123
+      BASE_URL: http://localhost:3100
+      PORT: "3100"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/apply-schema.mjs
+      - run: node scripts/create-admin.mjs
+      - name: Start server
+        run: |
+          npx next start -p 3100 > /tmp/gz-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3100/ -o /dev/null; then
+              echo "server up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server failed to start"; cat /tmp/gz-server.log; exit 1
+      - run: node scripts/smoke-test.mjs
+      - run: node scripts/smoke-shop.mjs
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/gz-server.log
