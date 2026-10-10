@@ -6,6 +6,7 @@ import { currentRate } from "@/lib/rates";
 import { distanceKm, etaMinutes } from "@/lib/geo";
 import { COMMISSION_RATE, fareUsd } from "@/lib/pricing";
 import { ACTIVE_STATUSES, TRIP_COLUMNS, getTrip } from "@/lib/trips";
+import { getNumberSetting } from "@/lib/settings";
 
 /** Customer: request a trip. The fare is priced now and locked for the trip. */
 export async function POST(req: Request) {
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
         etaMinutes(km),
         fareUsd(body.service_type, km),
         rate.ssp_per_usd,
-        COMMISSION_RATE,
+        await getNumberSetting("commission_rate", COMMISSION_RATE),
       ],
     );
     const trip = await getTrip(inserted!.id);

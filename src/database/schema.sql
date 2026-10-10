@@ -314,3 +314,15 @@ CREATE TABLE IF NOT EXISTS trip_shares (
 );
 
 CREATE INDEX IF NOT EXISTS trip_shares_trip_idx ON trip_shares (trip_id);
+
+-- ----------------------------------------------------------- settings
+-- Small key/value store for platform-wide settings (e.g. commission rate).
+CREATE TABLE IF NOT EXISTS settings (
+  key        text PRIMARY KEY,
+  value      text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  updated_by uuid REFERENCES users (id) ON DELETE SET NULL
+);
+
+INSERT INTO settings (key, value) VALUES ('commission_rate', '0.20')
+ON CONFLICT (key) DO NOTHING;
