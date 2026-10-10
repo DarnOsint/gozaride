@@ -143,6 +143,20 @@ const earnings = await api("GET", "/api/driver/earnings", { token: dt });
 const expectedUsd = Math.round(done.json.trip.fare_usd * 0.8 * 100) / 100;
 check("driver earnings recorded at 80% of fare", earnings.status === 200 && Math.abs(earnings.json.total_usd - expectedUsd) < 0.01, JSON.stringify(earnings));
 
+// 6b. Wallet credit + payout flow.
+const dw = await api("GET", "/api/wallet", { token: dt });
+check("trip completion credits driver wallet", dw.status === 200 && Math.abs(dw.json.usd_balance - expectedUsd) < 0.01, JSON.stringify(dw));
+const topupNoKeys = await api("POST", "/api/payments/topup", { token: customer.json.token, body: { usd: 10 } });
+check("top-up degrades cleanly without Stripe keys", topupNoKeys.status === 503, JSON.stringify(topupNoKeys));
+const bigPayout = await api("POST", "/api/payments/payout", { token: dt, body: { usd: expectedUsd + 100 } });
+check("payout larger than balance refused", bigPayout.status === 409, JSON.stringify(bigPayout));
+const payout = await api("POST", "/api/payments/payout", { token: dt, body: { usd: expectedUsd } });
+check("payout request accepted", payout.status === 201, JSON.stringify(payout));
+const dw2 = await api("GET", "/api/wallet", { token: dt });
+check("payout deducted from wallet USD", dw2.status === 200 && Math.abs(dw2.json.usd_balance) < 0.01, JSON.stringify(dw2));
+const payouts = await api("GET", "/api/payments/payouts", { token: dt });
+check("payout listed as pending", payouts.status === 200 && payouts.json.payouts.some((p) => p.status === "pending"), JSON.stringify(payouts.json).slice(0, 200));
+
 // 7. Ratings.
 const rate1 = await api("POST", `/api/trips/${trip.id}/rate`, { token: customer.json.token, body: { stars: 5, comment: "Great" } });
 check("customer rates driver", rate1.status === 201, JSON.stringify(rate1));

@@ -21,6 +21,7 @@ function ProfileDashboard({ token }: { token: string }) {
   const [rate, setRate] = useState<{ ssp_per_usd: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [topupUsd, setTopupUsd] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -33,6 +34,21 @@ function ProfileDashboard({ token }: { token: string }) {
       setRate(r);
     });
   }, [token]);
+
+  async function topup() {
+    const usd = Number(topupUsd);
+    if (!usd || usd < 1) return alert("Enter a USD amount (minimum $1)");
+    if (usd > 1_000_000) return alert("Amount too large");
+    try {
+      setBusy("topup");
+      const res = await api<{ url: string }>("/api/payments/topup", { token, body: { usd } });
+      window.location.href = res.url;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function convert() {
     if (!rate) return;
@@ -105,6 +121,32 @@ function ProfileDashboard({ token }: { token: string }) {
             </button>
           )}
           {message && <p className="mt-3 text-sm text-green-700">{message}</p>}
+
+          <div className="mt-5 border-t border-gray-200 pt-5">
+            <p className="text-sm text-gray-500 mb-2">Top up your USD wallet</p>
+            <div className="flex gap-3">
+              <input
+                type="number"
+                min="1"
+                value={topupUsd}
+                onChange={(e) => setTopupUsd(e.target.value)}
+                placeholder="Amount (USD)"
+                className="w-40 rounded-xl border border-gray-300 px-4 py-3 focus:border-orange-500 focus:outline-none"
+              />
+              <button
+                onClick={topup}
+                disabled={busy === "topup"}
+                className="rounded-xl bg-gray-900 px-6 py-3 font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {busy === "topup" ? "Opening checkout..." : "Top up"}
+              </button>
+            </div>
+            {user?.role === "driver" && (
+              <a href="/driver" className="mt-4 inline-block text-sm font-medium text-orange-600 hover:underline">
+                Request a USD payout from the driver dashboard →
+              </a>
+            )}
+          </div>
         </div>
       )}
 

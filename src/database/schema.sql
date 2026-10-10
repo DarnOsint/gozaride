@@ -202,8 +202,13 @@ CREATE TABLE IF NOT EXISTS transactions (
   currency_used    text NOT NULL CHECK (currency_used IN ('ssp', 'usd')),
   status           text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'refunded')),
   description      text CHECK (description IS NULL OR char_length(description) <= 300),
+  reference        text,
   created_at       timestamptz NOT NULL DEFAULT now()
 );
+
+-- Idempotency guard for Stripe callbacks and other external references.
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS reference text;
+CREATE UNIQUE INDEX IF NOT EXISTS transactions_reference_uniq ON transactions (reference) WHERE reference IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS transactions_user_idx ON transactions (user_id, created_at DESC);
 

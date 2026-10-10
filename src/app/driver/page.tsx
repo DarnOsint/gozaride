@@ -40,6 +40,38 @@ function DriverDashboard({ token }: { token: string }) {
   const [earnings, setEarnings] = useState<Earnings | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [payoutUsd, setPayoutUsd] = useState("");
+  const [walletUsd, setWalletUsd] = useState<number | null>(null);
+
+  const loadEarnings = useCallback(async () => {
+    try {
+      const data = await api<Earnings>("/api/driver/earnings", { token });
+      setEarnings(data);
+      const w = await api<{ usd_balance: number }>("/api/wallet", { token }).catch(() => null);
+      setWalletUsd(w?.usd_balance ?? null);
+    } catch {
+      setEarnings(null);
+    }
+  }, [token]);
+
+  async function requestPayout() {
+    const usd = Number(payoutUsd);
+    if (!usd || usd < 1) return alert("Enter a USD amount (minimum $1)");
+    if (walletUsd !== null && usd > walletUsd) return alert(`Max payout is $${walletUsd.toFixed(2)}`);
+    try {
+      setBusy("payout");
+      const res = await api<{ requested: number }>("/api/payments/payout", { token, body: { usd } });
+      setMessage(`Payout of $${res.requested} requested. Awaiting admin settlement.`);
+      setPayoutUsd("");
+      setWalletUsd(walletUsd !== null ? walletUsd - res.requested : walletUsd);
+      setTimeout(() => setMessage(null), 5000);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const loadOnline = useCallback(async () => {
     try {
@@ -65,15 +97,6 @@ function DriverDashboard({ token }: { token: string }) {
       setHistory(data.trips);
     } catch {
       setHistory([]);
-    }
-  }, [token]);
-
-  const loadEarnings = useCallback(async () => {
-    try {
-      const data = await api<Earnings>("/api/driver/earnings", { token });
-      setEarnings(data);
-    } catch {
-      setEarnings(null);
     }
   }, [token]);
 
@@ -199,6 +222,31 @@ function DriverDashboard({ token }: { token: string }) {
           <p className="text-sm text-gray-600">Status</p>
           <p className="text-3xl font-bold mt-1">{online ? "Online" : "Offline"}</p>
         </div>
+      </div>
+
+      <div className="rounded-2xl bg-white p-6 ring-1 ring-gray-200 mb-8">
+        <h3 className="text-lg font-bold mb-1">Payout</h3>
+        <p className="text-sm text-gray-500 mb-3">
+          Request a payout of your earned USD balance. A platform admin settles it.
+        </p>
+        <div className="flex gap-3">
+          <input
+            type="number"
+            min="1"
+            value={payoutUsd}
+            onChange={(e) => setPayoutUsd(e.target.value)}
+            placeholder={`Amount (up to $${money(walletUsd ?? 0)})`}
+            className="w-48 rounded-xl border border-gray-300 px-4 py-3 focus:border-orange-500 focus:outline-none"
+          />
+          <button
+            onClick={requestPayout}
+            disabled={busy === "payout"}
+            className="rounded-xl bg-gray-900 px-6 py-3 font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+          >
+            {busy === "payout" ? "Requesting..." : "Request payout"}
+          </button>
+        </div>
+        {message && <p className="mt-3 text-sm text-green-700">{message}</p>}
       </div>
 
       {online && (

@@ -92,6 +92,16 @@ export async function completeTrip(tripId: string, driverId: string): Promise<Re
        VALUES ($1, $2, $3, $4)`,
       [driverId, tripId, netSsp, netUsd],
     );
+    await db.query(
+      `INSERT INTO wallets (user_id) VALUES ($1)
+         ON CONFLICT (user_id) DO NOTHING`,
+      [driverId],
+    );
+    await db.query(
+      `UPDATE wallets SET usd_balance = usd_balance + $1, ssp_balance = ssp_balance + $2
+        WHERE user_id = $3`,
+      [netUsd, netSsp, driverId],
+    );
     return good(tripId);
   });
 }
