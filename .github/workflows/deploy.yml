@@ -1,0 +1,50 @@
+name: Deploy
+
+# Runs only after CI passes on master, so broken code never reaches the VPS.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [master]
+    types: [completed]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /var/www/gozaride
+            git fetch origin master
+            git reset --hard origin/master
+            printf '%s\n' "${{ secrets.ENV_PRODUCTION }}" > .env.production
+            docker compose up -d --build migrate
+            docker compose up -d --build app nginx
+            docker image prune -f
+            echo "Deploy complete: https://$(cat .env.production | grep -m1 DOMAIN | cut -d= -f2 || echo gozaride.com)"
+
+      - name: Verify health
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            for i in $(seq 1 15); do
+              if curl -sf http://127.0.0.1:80/api/health -o /dev/null; then
+                echo "Health check passed after ${i} attempts"
+                exit 0
+              fi
+              sleep 4
+            done
+            echo "Health check failed"; exit 1

@@ -1,0 +1,65 @@
+name: gozaride
+
+services:
+  migrate:
+    image: node:20-alpine
+    command: ["sh", "-c", "npm ci --omit=dev && node scripts/apply-schema.mjs && node scripts/create-admin.mjs"]
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      DATABASE_URL: postgresql://gozaride:${POSTGRES_PASSWORD:-changeme}@db:5432/gozaride
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@gozaride.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gozaride
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: gozaride
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gozaride"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    image: gozaride/app:latest
+    environment:
+      DATABASE_URL: postgresql://gozaride:${POSTGRES_PASSWORD:-changeme}@db:5432/gozaride
+      JWT_SECRET: ${JWT_SECRET}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    env_file:
+      - .env.production
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

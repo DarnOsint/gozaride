@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { SiteHeader } from "@/components/SiteHeader";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className={`${inter.className} min-h-screen bg-gray-50 text-gray-900 antialiased`}>
         <AuthProvider>
+          <ServiceWorkerRegister />
           <SiteHeader />
           <main>{children}</main>
         </AuthProvider>
