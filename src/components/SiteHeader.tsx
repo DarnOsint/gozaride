@@ -49,6 +49,12 @@ export function SiteHeader() {
           {ready && user ? (
             <>
               <NotificationBell />
+              <Link
+                href="/rewards"
+                className="hidden rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:text-orange-600 sm:inline-block"
+              >
+                Rewards
+              </Link>
               {dashboard && (
                 <Link
                   href={dashboard.href}

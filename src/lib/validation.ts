@@ -20,6 +20,7 @@ export const signUpSchema = z.object({
   // Admins cannot self-register. An existing admin must create them.
   role: z.enum(["customer", "driver", "shop"]),
   shop_name: z.string().trim().min(2).max(120).optional(),
+  referral_code: z.string().trim().toUpperCase().max(16).optional(),
 });
 
 export const shopProfileSchema = z.object({

@@ -72,7 +72,6 @@ function ProfileDashboard({ token }: { token: string }) {
     { role: "shop" as const, label: "Shop dashboard", href: "/shop" },
     { role: "admin" as const, label: "Admin panel", href: "/nen" },
   ];
-
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">{user?.full_name}&apos;s Profile</h1>
@@ -149,6 +148,19 @@ function ProfileDashboard({ token }: { token: string }) {
           </div>
         </div>
       )}
+
+      <section className="mb-8">
+        <h2 className="text-xl font-bold mb-4">Rewards</h2>
+        <a
+          href="/rewards"
+          className="block rounded-xl bg-white p-4 ring-1 ring-gray-200 transition hover:ring-orange-300"
+        >
+          <p className="font-medium">Loyalty points &amp; referrals</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Earn points on every trip and order, redeem for wallet credit, and invite friends.
+          </p>
+        </a>
+      </section>
 
       <section className="mb-8">
         <h2 className="text-xl font-bold mb-4">Quick links</h2>

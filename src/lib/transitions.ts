@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import { withTx } from "./db";
 import { getTrip } from "./trips";
 import { notify } from "./push";
+import { awardPoints, pointsForEarnings, pointsForFare } from "./loyalty";
 
 export type Result<T = void> =
   | { ok: true; value: T }
@@ -123,7 +124,8 @@ export async function completeTrip(tripId: string, driverId: string): Promise<Re
     const done = await db.query(
       `UPDATE trips SET status = 'completed', completed_at = now()
         WHERE id = $1 AND driver_id = $2 AND status = 'in_progress'
-        RETURNING id, fare_usd::float8 AS fare_usd, exchange_rate_ssp_per_usd::float8 AS rate,
+        RETURNING id, customer_id, fare_usd::float8 AS fare_usd,
+                  exchange_rate_ssp_per_usd::float8 AS rate,
                   commission_rate::float8 AS commission`,
       [tripId, driverId],
     );
@@ -147,6 +149,10 @@ export async function completeTrip(tripId: string, driverId: string): Promise<Re
         WHERE user_id = $3`,
       [netUsd, netSsp, driverId],
     );
+
+    // Loyalty: the customer earns on the fare, the driver on net earnings.
+    await awardPoints(db, trip.customer_id, pointsForFare(trip.fare_usd), "trip", tripId);
+    await awardPoints(db, driverId, pointsForEarnings(netUsd), "trip_earnings", tripId);
     return good(tripId);
   });
   if (res.ok) {

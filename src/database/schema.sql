@@ -251,3 +251,35 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 );
 
 CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions (user_id);
+
+-- --------------------------------------------------- referrals & loyalty
+-- Every user has a shareable referral code; `referred_by` links a new user
+-- back to whoever invited them.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by uuid REFERENCES users (id);
+CREATE UNIQUE INDEX IF NOT EXISTS users_referral_code_uniq ON users (referral_code) WHERE referral_code IS NOT NULL;
+
+-- Loyalty points live alongside the wallet balance.
+ALTER TABLE wallets ADD COLUMN IF NOT EXISTS loyalty_points integer NOT NULL DEFAULT 0 CHECK (loyalty_points >= 0);
+
+CREATE TABLE IF NOT EXISTS loyalty_events (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  points     integer NOT NULL,
+  reason     text NOT NULL,
+  ref        text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS loyalty_events_user_idx ON loyalty_events (user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS referrals (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  referee_id  uuid NOT NULL UNIQUE REFERENCES users (id) ON DELETE CASCADE,
+  reward_usd  numeric(12, 2) NOT NULL DEFAULT 0,
+  points      integer NOT NULL DEFAULT 0,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS referrals_referrer_idx ON referrals (referrer_id, created_at DESC);

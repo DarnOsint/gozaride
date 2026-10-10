@@ -4,6 +4,7 @@ import { parseBody, fail, ok, failFromError, HttpError, isResponse } from "@/lib
 import { orderStatusSchema } from "@/lib/validation";
 import { SHOP_TRANSITIONS } from "@/lib/shop";
 import { notify } from "@/lib/push";
+import { awardPoints, pointsForFare } from "@/lib/loyalty";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -44,8 +45,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   try {
     const part = await withTx(async (db) => {
       const current = (
-        await db.query<{ status: string; shop_id: string; customer_id: string; driver_id: string | null }>(
-          "SELECT status, shop_id, customer_id, driver_id FROM shop_orders WHERE id = $1 FOR UPDATE",
+        await db.query<{ status: string; shop_id: string; customer_id: string; driver_id: string | null; total_usd: number }>(
+          "SELECT status, shop_id, customer_id, driver_id, total_usd::float8 AS total_usd FROM shop_orders WHERE id = $1 FOR UPDATE",
           [id],
         )
       ).rows[0];
@@ -76,6 +77,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
             WHERE i.order_id = $1 AND p.id = i.product_id`,
           [id],
         );
+      }
+      if (body.status === "delivered") {
+        // Loyalty: the customer earns on the order total.
+        await awardPoints(db, current.customer_id, pointsForFare(current.total_usd), "order", id);
       }
       return { shop_id: current.shop_id, customer_id: current.customer_id };
     });

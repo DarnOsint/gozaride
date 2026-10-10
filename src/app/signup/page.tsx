@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useAuth, type Role } from "@/context/AuthContext";
 import { dashboardFor } from "@/lib/roles";
 
@@ -21,8 +21,15 @@ export default function SignUpPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [referral, setReferral] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Prefill the referral code when arriving via an invite link (?ref=CODE).
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) setReferral(ref.toUpperCase());
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -39,6 +46,7 @@ export default function SignUpPage() {
         phone: phone.trim() || undefined,
         password,
         role,
+        referral_code: referral.trim() || undefined,
       });
       router.push(dashboardFor(user.role));
     } catch (err) {
@@ -103,6 +111,17 @@ export default function SignUpPage() {
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Confirm password</span>
             <input className={field} type="password" required minLength={8} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Referral code (optional)</span>
+            <input
+              className={field}
+              value={referral}
+              onChange={(e) => setReferral(e.target.value.toUpperCase())}
+              placeholder="e.g. ABC234XY"
+              maxLength={16}
+            />
+            <span className="mt-1 block text-xs text-gray-500">Both of you get bonus points when you sign up.</span>
           </label>
 
           {error && (

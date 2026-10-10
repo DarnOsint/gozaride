@@ -188,6 +188,35 @@ check("unread count drops to zero", notes2.json.unread === 0, JSON.stringify(not
 const pk = await api("GET", "/api/notifications/public-key");
 check("push public-key endpoint responds", pk.status === 200 && "enabled" in pk.json, JSON.stringify(pk));
 
+// 7c. Loyalty and referrals.
+const loyalty = await api("GET", "/api/loyalty", { token: customer.json.token });
+check(
+  "loyalty exposes a referral code",
+  loyalty.status === 200 && /^[A-Z0-9]{8}$/.test(loyalty.json.referral_code ?? ""),
+  JSON.stringify(loyalty.json).slice(0, 200),
+);
+const refA = await api("POST", "/api/auth/signup", {
+  body: { email: `refa-${run}@test.gozaride`, password: pwd, full_name: "Ref A", role: "customer", referral_code: loyalty.json.referral_code },
+});
+check("signup accepts a referral code", refA.status === 201, JSON.stringify(refA));
+const refB = await api("POST", "/api/auth/signup", {
+  body: { email: `refb-${run}@test.gozaride`, password: pwd, full_name: "Ref B", role: "customer", referral_code: loyalty.json.referral_code },
+});
+check("second referral accepted", refB.status === 201, JSON.stringify(refB));
+const afterL = await api("GET", "/api/loyalty", { token: customer.json.token });
+check("referrals recorded for the inviter", afterL.json.referrals >= 2, JSON.stringify(afterL.json).slice(0, 200));
+check("inviter earned loyalty points", afterL.json.points >= 100, JSON.stringify(afterL.json.points));
+const refWallet = await api("GET", "/api/wallet", { token: customer.json.token });
+check("referral paid a cash reward", refWallet.json.usd_balance >= 2, JSON.stringify(refWallet.json.usd_balance));
+const refLoyal = await api("GET", "/api/loyalty", { token: refA.json.token });
+check("new user got a welcome bonus", refLoyal.json.points >= 50, JSON.stringify(refLoyal.json.points));
+const lowRedeem = await api("POST", "/api/loyalty/redeem", { token: customer.json.token, body: { points: 50 } });
+check("reject sub-minimum redemption", lowRedeem.status === 422, JSON.stringify(lowRedeem));
+const bigRedeem = await api("POST", "/api/loyalty/redeem", { token: refA.json.token, body: { points: 999999 } });
+check("reject redemption beyond balance", bigRedeem.status === 409, JSON.stringify(bigRedeem));
+const redeem = await api("POST", "/api/loyalty/redeem", { token: customer.json.token, body: { points: 100 } });
+check("redeem 100 points for $1 wallet credit", redeem.status === 200 && Math.abs(redeem.json.usd - 1) < 0.001, JSON.stringify(redeem));
+
 // 8. Visibility and roles.
 const mine = await api("GET", "/api/trips", { token: customer.json.token });
 check("customer sees own trips", mine.status === 200 && mine.json.trips.some((t) => t.id === trip.id));

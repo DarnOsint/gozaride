@@ -34,6 +34,7 @@ type AuthContextValue = AuthState & {
     full_name: string;
     phone?: string;
     role: Role;
+    referral_code?: string;
   }) => Promise<User>;
   signOut: () => void;
 };
@@ -115,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       full_name: string;
       phone?: string;
       role: Role;
+      referral_code?: string;
     }) => {
       const data = await postJson<{ token: string; user: User }>(
         "/api/auth/signup",
