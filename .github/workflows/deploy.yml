@@ -1,3 +1,5 @@
+# Deploy to the VPS. Skipped with status "skipped" (never fails) until the
+# VPS_HOST secret is configured in the repo, so unprovisioned repos stay green.
 name: Deploy
 
 # Runs only after CI passes on master, so broken code never reaches the VPS.
@@ -10,7 +12,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && secrets.VPS_HOST != '' && secrets.VPS_HOST != null }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
