@@ -98,6 +98,14 @@ check("delivery fee at least $1.50", Math.round((order.total_usd - 13) * 100) / 
 const after = await api("GET", "/api/shop/products", { token: shopToken });
 check("stock reserved (10 -> 8)", after.json.products[0].stock_quantity === 8, JSON.stringify(after.json));
 
+// The shop is notified of the new order.
+const shopNotes = await api("GET", "/api/notifications", { token: shopToken });
+check(
+  "shop notified of new order",
+  shopNotes.status === 200 && (shopNotes.json.notifications ?? []).some((n) => n.kind === "order_new"),
+  JSON.stringify(shopNotes.json).slice(0, 200),
+);
+
 // Stock and location checks.
 const tooMany = await api("POST", "/api/shop/orders", {
   token: custToken,
@@ -125,6 +133,13 @@ const wrongRole = await api("POST", `/api/shop/orders/${order.id}/status`, { tok
 check("customer cannot confirm", wrongRole.status === 403, JSON.stringify(wrongRole));
 const confirm = await api("POST", `/api/shop/orders/${order.id}/status`, { token: shopToken, body: { status: "confirmed" } });
 check("shop confirms", confirm.status === 200 && confirm.json.status === "confirmed", JSON.stringify(confirm));
+
+const custNotes = await api("GET", "/api/notifications", { token: custToken });
+check(
+  "customer notified of order update",
+  custNotes.status === 200 && (custNotes.json.notifications ?? []).some((n) => n.kind === "order_update"),
+  JSON.stringify(custNotes.json).slice(0, 200),
+);
 
 // Customer cancels a second order: stock must come back.
 const second = await api("POST", "/api/shop/orders", {

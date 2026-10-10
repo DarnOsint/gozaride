@@ -3,8 +3,18 @@ import { requireSession, type Session } from "@/lib/auth";
 import { parseBody, fail, ok, failFromError, HttpError, isResponse } from "@/lib/http";
 import { orderStatusSchema } from "@/lib/validation";
 import { SHOP_TRANSITIONS } from "@/lib/shop";
+import { notify } from "@/lib/push";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const ORDER_STATUS_TEXT: Record<string, string> = {
+  confirmed: "Your order was confirmed by the shop.",
+  preparing: "Your order is being prepared.",
+  ready_for_pickup: "Your order is ready for pickup.",
+  out_for_delivery: "Your order is on the way.",
+  delivered: "Your order was delivered. Enjoy!",
+  cancelled: "Your order was cancelled.",
+};
 
 const TIMESTAMP_FOR: Record<string, string> = {
   confirmed: "confirmed_at",
@@ -32,7 +42,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (isResponse(body)) return body;
 
   try {
-    await withTx(async (db) => {
+    const part = await withTx(async (db) => {
       const current = (
         await db.query<{ status: string; shop_id: string; customer_id: string; driver_id: string | null }>(
           "SELECT status, shop_id, customer_id, driver_id FROM shop_orders WHERE id = $1 FOR UPDATE",
@@ -67,7 +77,22 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           [id],
         );
       }
+      return { shop_id: current.shop_id, customer_id: current.customer_id };
     });
+
+    const text =
+      ORDER_STATUS_TEXT[body.status] ??
+      `Your order status changed to ${body.status.replace(/_/g, " ")}.`;
+    const recipients = new Set<string>();
+    if (session.id !== part.customer_id) recipients.add(part.customer_id);
+    if (session.id !== part.shop_id && (body.status === "cancelled" || body.status === "delivered")) {
+      recipients.add(part.shop_id);
+    }
+    await Promise.all(
+      [...recipients].map((uid) =>
+        notify(uid, { title: "Order update", body: text, kind: "order_update", data: { order_id: id } }),
+      ),
+    );
     return ok({ id, status: (await readStatus(id)) });
   } catch (err) {
     return failFromError(err, "order status");

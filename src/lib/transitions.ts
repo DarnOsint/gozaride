@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { withTx } from "./db";
 import { getTrip } from "./trips";
+import { notify } from "./push";
 
 export type Result<T = void> =
   | { ok: true; value: T }
@@ -13,9 +14,35 @@ const bad = (status: number, message: string): { ok: false; status: number; mess
   message,
 });
 
+/** Notify a trip's participants after a state change. Never throws. */
+async function notifyTrip(
+  tripId: string,
+  opts: { exclude?: string; title: string; body: string; kind: string },
+): Promise<void> {
+  try {
+    const trip = await getTrip(tripId);
+    if (!trip) return;
+    const recipients = [trip.customer_id, trip.driver_id].filter(
+      (id): id is string => Boolean(id) && id !== opts.exclude,
+    );
+    await Promise.all(
+      recipients.map((id) =>
+        notify(id, {
+          title: opts.title,
+          body: opts.body,
+          kind: opts.kind,
+          data: { trip_id: tripId },
+        }),
+      ),
+    );
+  } catch (err) {
+    console.error("[notify] trip", err);
+  }
+}
+
 /** Driver accepts a pending trip. Serialised per driver so one driver cannot hold two trips. */
 export async function acceptTrip(tripId: string, driverId: string): Promise<Result<string>> {
-  return withTx(async (db: PoolClient) => {
+  const res = await withTx(async (db: PoolClient) => {
     await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [driverId]);
 
     const driver = await db.query<{ is_online: boolean }>(
@@ -43,6 +70,15 @@ export async function acceptTrip(tripId: string, driverId: string): Promise<Resu
     if (!updated.rowCount) return bad(409, "This trip was already taken");
     return good(tripId);
   });
+  if (res.ok) {
+    await notifyTrip(tripId, {
+      exclude: driverId,
+      title: "Driver on the way",
+      body: "A driver accepted your request and is heading to the pickup point.",
+      kind: "trip_update",
+    });
+  }
+  return res;
 }
 
 /** Generic guarded transition. The WHERE clause enforces who may move the trip from which state. */
@@ -61,8 +97,8 @@ async function guardedUpdate(
   });
 }
 
-export function startTrip(tripId: string, driverId: string) {
-  return guardedUpdate(
+export async function startTrip(tripId: string, driverId: string) {
+  const res = await guardedUpdate(
     tripId,
     `UPDATE trips SET status = 'in_progress', started_at = now()
       WHERE id = $1 AND driver_id = $2 AND status = 'accepted'
@@ -70,11 +106,20 @@ export function startTrip(tripId: string, driverId: string) {
     [tripId, driverId],
     "This trip cannot be started right now",
   );
+  if (res.ok) {
+    await notifyTrip(tripId, {
+      exclude: driverId,
+      title: "Trip started",
+      body: "Your trip is now in progress. Track your driver live on the map.",
+      kind: "trip_update",
+    });
+  }
+  return res;
 }
 
 /** Complete a trip and record the driver's net earnings (fare minus platform commission). */
 export async function completeTrip(tripId: string, driverId: string): Promise<Result<string>> {
-  return withTx(async (db) => {
+  const res = await withTx(async (db) => {
     const done = await db.query(
       `UPDATE trips SET status = 'completed', completed_at = now()
         WHERE id = $1 AND driver_id = $2 AND status = 'in_progress'
@@ -104,32 +149,50 @@ export async function completeTrip(tripId: string, driverId: string): Promise<Re
     );
     return good(tripId);
   });
+  if (res.ok) {
+    await notifyTrip(tripId, {
+      exclude: driverId,
+      title: "Trip completed",
+      body: "Your trip is complete. Please rate your driver.",
+      kind: "trip_update",
+    });
+  }
+  return res;
 }
 
 /** Customers may cancel before the trip starts. Drivers may cancel an accepted trip. */
-export function cancelTrip(
+export async function cancelTrip(
   tripId: string,
   actor: { id: string; role: "customer" | "driver" },
   reason: string | undefined,
-) {
-  if (actor.role === "customer") {
-    return guardedUpdate(
-      tripId,
-      `UPDATE trips SET status = 'cancelled', cancelled_at = now(), cancel_reason = $3
-        WHERE id = $1 AND customer_id = $2 AND status IN ('pending', 'accepted')
-        RETURNING id`,
-      [tripId, actor.id, reason ?? null],
-      "This trip can no longer be cancelled",
-    );
+): Promise<Result<string>> {
+  const res =
+    actor.role === "customer"
+      ? await guardedUpdate(
+          tripId,
+          `UPDATE trips SET status = 'cancelled', cancelled_at = now(), cancel_reason = $3
+            WHERE id = $1 AND customer_id = $2 AND status IN ('pending', 'accepted')
+            RETURNING id`,
+          [tripId, actor.id, reason ?? null],
+          "This trip can no longer be cancelled",
+        )
+      : await guardedUpdate(
+          tripId,
+          `UPDATE trips SET status = 'cancelled', cancelled_at = now(), cancel_reason = $3
+            WHERE id = $1 AND driver_id = $2 AND status = 'accepted'
+            RETURNING id`,
+          [tripId, actor.id, reason ?? null],
+          "This trip can no longer be cancelled by the driver",
+        );
+  if (res.ok) {
+    await notifyTrip(tripId, {
+      exclude: actor.id,
+      title: "Trip cancelled",
+      body: `The trip was cancelled${reason ? `: ${reason}` : "."}`,
+      kind: "trip_cancelled",
+    });
   }
-  return guardedUpdate(
-    tripId,
-    `UPDATE trips SET status = 'cancelled', cancelled_at = now(), cancel_reason = $3
-      WHERE id = $1 AND driver_id = $2 AND status = 'accepted'
-      RETURNING id`,
-    [tripId, actor.id, reason ?? null],
-    "This trip can no longer be cancelled by the driver",
-  );
+  return res;
 }
 
 /** Store a rating after completion. Driver averages are recalculated from the ratings table. */

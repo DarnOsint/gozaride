@@ -224,3 +224,30 @@ CREATE TABLE IF NOT EXISTS earnings_history (
 );
 
 CREATE INDEX IF NOT EXISTS earnings_driver_idx ON earnings_history (driver_id, paid_at DESC);
+
+-- -------------------------------------------------------- notifications
+-- In-app notifications, always available (works without push keys).
+CREATE TABLE IF NOT EXISTS notifications (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  title      text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 120),
+  body       text CHECK (body IS NULL OR char_length(body) <= 500),
+  kind       text NOT NULL DEFAULT 'info',
+  data       jsonb NOT NULL DEFAULT '{}'::jsonb,
+  read_at    timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications (user_id, created_at DESC);
+
+-- Web Push subscriptions (one row per browser/device endpoint).
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  endpoint   text NOT NULL UNIQUE,
+  p256dh     text NOT NULL,
+  auth       text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions (user_id);

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const PUBLIC_LINKS = [
   { href: "/services/taxi", label: "Taxi" },
@@ -47,6 +48,7 @@ export function SiteHeader() {
         <div className="flex items-center gap-2">
           {ready && user ? (
             <>
+              <NotificationBell />
               {dashboard && (
                 <Link
                   href={dashboard.href}

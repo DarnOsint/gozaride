@@ -92,3 +92,11 @@ export const rateSchema = z.object({
   ssp_per_usd: z.number().positive().max(1_000_000),
   note: z.string().trim().max(300).optional(),
 });
+
+export const pushSubscribeSchema = z.object({
+  endpoint: z.string().url().max(1000),
+  keys: z.object({
+    p256dh: z.string().min(1).max(500),
+    auth: z.string().min(1).max(500),
+  }),
+});

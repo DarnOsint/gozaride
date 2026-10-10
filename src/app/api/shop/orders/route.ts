@@ -5,6 +5,7 @@ import { shopOrderSchema } from "@/lib/validation";
 import { distanceKm } from "@/lib/geo";
 import { deliveryFeeUsd, toSspAmount } from "@/lib/shop";
 import { ORDER_SELECT } from "@/lib/orders";
+import { notify } from "@/lib/push";
 
 /** Customer: place an order from one shop. Stock is checked and reserved in the same transaction. */
 export async function POST(req: Request) {
@@ -139,6 +140,12 @@ export async function POST(req: Request) {
     });
 
     const created = await queryOne(`${ORDER_SELECT} WHERE o.id = $1`, [orderId]);
+    await notify(body.shop_id, {
+      title: "New order",
+      body: "You have a new order waiting to be confirmed.",
+      kind: "order_new",
+      data: { order_id: orderId },
+    });
     return ok({ order: created }, 201);
   } catch (err) {
     return failFromError(err, "create order");

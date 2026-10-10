@@ -172,6 +172,22 @@ check("customer rates driver", rate1.status === 201, JSON.stringify(rate1));
 const rate2 = await api("POST", `/api/trips/${trip.id}/rate`, { token: customer.json.token, body: { stars: 1 } });
 check("duplicate rating rejected", rate2.status === 409, JSON.stringify(rate2));
 
+// 7b. Notifications.
+const notes = await api("GET", "/api/notifications", { token: customer.json.token });
+const noteTitles = (notes.json.notifications ?? []).map((n) => n.title);
+check(
+  "trip lifecycle notifies the customer",
+  notes.status === 200 && noteTitles.includes("Driver on the way") && noteTitles.includes("Trip completed"),
+  JSON.stringify(notes.json).slice(0, 300),
+);
+check("notifications report an unread count", notes.json.unread >= 3, JSON.stringify(notes.json.unread));
+const readAll = await api("POST", "/api/notifications/read", { token: customer.json.token, body: {} });
+check("mark all notifications read", readAll.status === 200, JSON.stringify(readAll));
+const notes2 = await api("GET", "/api/notifications", { token: customer.json.token });
+check("unread count drops to zero", notes2.json.unread === 0, JSON.stringify(notes2.json.unread));
+const pk = await api("GET", "/api/notifications/public-key");
+check("push public-key endpoint responds", pk.status === 200 && "enabled" in pk.json, JSON.stringify(pk));
+
 // 8. Visibility and roles.
 const mine = await api("GET", "/api/trips", { token: customer.json.token });
 check("customer sees own trips", mine.status === 200 && mine.json.trips.some((t) => t.id === trip.id));
