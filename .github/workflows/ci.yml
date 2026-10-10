@@ -51,6 +51,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run build
       - run: node scripts/apply-schema.mjs
       - run: node scripts/create-admin.mjs
       - name: Start server

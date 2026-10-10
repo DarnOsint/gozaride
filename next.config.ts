@@ -1,8 +1,6 @@
 const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
-  // Disable Turbopack entirely due to native addon incompatibility with Tailwind v4
-  turbopack: false,
   async headers() {
     return [
       {
