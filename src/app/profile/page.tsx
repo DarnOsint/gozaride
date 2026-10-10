@@ -3,13 +3,21 @@
 import { useEffect, useState } from "react";
 import { RequireRole } from "@/components/RequireRole";
 import { useAuth } from "@/context/AuthContext";
-import { api, ApiError, money, ssp } from "@/lib/client";
-import { dashboardFor } from "@/lib/roles";
+import { api } from "@/lib/client";
+
+type WalletTx = {
+  id: string;
+  type: string;
+  amount_usd: number;
+  amount_ssp: number;
+  status: string;
+  created_at: string;
+};
 
 function ProfileDashboard({ token }: { token: string }) {
   const { user } = useAuth();
   const [wallet, setWallet] = useState<{ ssp: number; usd: number } | null>(null);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<WalletTx[]>([]);
   const [rate, setRate] = useState<{ ssp_per_usd: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -17,7 +25,7 @@ function ProfileDashboard({ token }: { token: string }) {
   useEffect(() => {
     Promise.all([
       api<{ ssp_balance: number; usd_balance: number }>("/api/wallet", { token }).catch(() => null),
-      api<any[]>("/api/wallet/transactions?limit=20", { token }).catch(() => []),
+      api<{ transactions: WalletTx[] }>("/api/wallet/transactions?limit=20", { token }).then((d) => d.transactions).catch(() => []),
       api<{ ssp_per_usd: number }>("/api/rates", {}).catch(() => null),
     ]).then(([w, t, r]) => {
       setWallet(w ? { ssp: w.ssp_balance, usd: w.usd_balance } : null);
@@ -51,7 +59,7 @@ function ProfileDashboard({ token }: { token: string }) {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">{user?.full_name}'s Profile</h1>
+      <h1 className="text-2xl font-bold mb-6">{user?.full_name}&apos;s Profile</h1>
 
       <div className="rounded-2xl bg-white p-6 ring-1 ring-gray-200 mb-8">
         <div className="grid gap-4 md:grid-cols-2">

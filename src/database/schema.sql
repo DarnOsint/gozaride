@@ -107,3 +107,115 @@ CREATE TABLE IF NOT EXISTS ratings (
   created_at  timestamptz NOT NULL DEFAULT now(),
   UNIQUE (trip_id, rater_id)
 );
+
+-- ------------------------------------------------------------ shop profiles
+CREATE TABLE IF NOT EXISTS shop_profiles (
+  user_id      uuid PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  shop_name    text NOT NULL CHECK (char_length(shop_name) BETWEEN 2 AND 120),
+  address      text CHECK (address IS NULL OR char_length(address) <= 300),
+  latitude     double precision CHECK (latitude BETWEEN -90 AND 90),
+  longitude    double precision CHECK (longitude BETWEEN -180 AND 180),
+  is_open      boolean NOT NULL DEFAULT true,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+-- ------------------------------------------------------------- products
+CREATE TABLE IF NOT EXISTS products (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id         uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  name            text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 200),
+  description     text CHECK (description IS NULL OR char_length(description) <= 2000),
+  price_ssp       numeric(12, 2) NOT NULL CHECK (price_ssp >= 0),
+  price_usd       numeric(10, 2) NOT NULL CHECK (price_usd >= 0),
+  category        text NOT NULL CHECK (category IN ('food', 'grocery', 'electronics', 'clothing', 'other')),
+  image_url       text CHECK (image_url IS NULL OR char_length(image_url) <= 500),
+  stock_quantity  integer NOT NULL DEFAULT 0 CHECK (stock_quantity >= 0),
+  is_active       boolean NOT NULL DEFAULT true,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS products_shop_idx ON products (shop_id, is_active);
+
+-- --------------------------------------------------------- shop orders
+CREATE TABLE IF NOT EXISTS shop_orders (
+  id                         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id                    uuid NOT NULL REFERENCES users (id),
+  customer_id                uuid NOT NULL REFERENCES users (id),
+  driver_id                  uuid REFERENCES users (id),
+  status                     text NOT NULL DEFAULT 'pending'
+                               CHECK (status IN ('pending', 'confirmed', 'preparing', 'ready_for_pickup',
+                                                 'out_for_delivery', 'delivered', 'cancelled')),
+  subtotal_ssp               numeric(12, 2) NOT NULL DEFAULT 0 CHECK (subtotal_ssp >= 0),
+  delivery_fee_ssp           numeric(12, 2) NOT NULL DEFAULT 0 CHECK (delivery_fee_ssp >= 0),
+  total_ssp                  numeric(12, 2) NOT NULL DEFAULT 0 CHECK (total_ssp >= 0),
+  total_usd                  numeric(10, 2) NOT NULL DEFAULT 0 CHECK (total_usd >= 0),
+  exchange_rate_ssp_per_usd  numeric(14, 4) NOT NULL CHECK (exchange_rate_ssp_per_usd > 0),
+  pickup_address             text CHECK (pickup_address IS NULL OR char_length(pickup_address) <= 300),
+  delivery_address           text NOT NULL CHECK (char_length(delivery_address) BETWEEN 5 AND 300),
+  pickup_lat                 double precision NOT NULL CHECK (pickup_lat BETWEEN -90 AND 90),
+  pickup_lng                 double precision NOT NULL CHECK (pickup_lng BETWEEN -180 AND 180),
+  delivery_lat               double precision NOT NULL CHECK (delivery_lat BETWEEN -90 AND 90),
+  delivery_lng               double precision NOT NULL CHECK (delivery_lng BETWEEN -180 AND 180),
+  notes                      text CHECK (notes IS NULL OR char_length(notes) <= 500),
+  created_at                 timestamptz NOT NULL DEFAULT now(),
+  confirmed_at               timestamptz,
+  ready_at                   timestamptz,
+  picked_up_at               timestamptz,
+  delivered_at               timestamptz,
+  cancelled_at               timestamptz,
+  cancel_reason              text CHECK (cancel_reason IS NULL OR char_length(cancel_reason) <= 300)
+);
+
+CREATE INDEX IF NOT EXISTS shop_orders_shop_idx ON shop_orders (shop_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS shop_orders_customer_idx ON shop_orders (customer_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS shop_orders_driver_idx ON shop_orders (driver_id, status);
+
+CREATE TABLE IF NOT EXISTS shop_order_items (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id        uuid NOT NULL REFERENCES shop_orders (id) ON DELETE CASCADE,
+  product_id      uuid NOT NULL REFERENCES products (id),
+  quantity        integer NOT NULL CHECK (quantity > 0),
+  unit_price_ssp  numeric(12, 2) NOT NULL CHECK (unit_price_ssp >= 0),
+  unit_price_usd  numeric(10, 2) NOT NULL CHECK (unit_price_usd >= 0),
+  line_total_ssp  numeric(12, 2) NOT NULL CHECK (line_total_ssp >= 0),
+  line_total_usd  numeric(10, 2) NOT NULL CHECK (line_total_usd >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS shop_order_items_order_idx ON shop_order_items (order_id);
+
+-- ------------------------------------------------------------- wallets
+CREATE TABLE IF NOT EXISTS wallets (
+  user_id      uuid PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  ssp_balance  numeric(14, 2) NOT NULL DEFAULT 0 CHECK (ssp_balance >= 0),
+  usd_balance  numeric(12, 2) NOT NULL DEFAULT 0 CHECK (usd_balance >= 0),
+  updated_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  type             text NOT NULL CHECK (type IN ('deposit', 'withdrawal', 'trip_payment', 'shop_payment',
+                                                  'commission', 'bonus', 'refund', 'convert', 'payout')),
+  amount_ssp       numeric(14, 2) NOT NULL DEFAULT 0,
+  amount_usd       numeric(12, 2) NOT NULL DEFAULT 0,
+  currency_used    text NOT NULL CHECK (currency_used IN ('ssp', 'usd')),
+  status           text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'refunded')),
+  description      text CHECK (description IS NULL OR char_length(description) <= 300),
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS transactions_user_idx ON transactions (user_id, created_at DESC);
+
+-- ------------------------------------------------------- driver earnings
+CREATE TABLE IF NOT EXISTS earnings_history (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  driver_id          uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  trip_id            uuid REFERENCES trips (id) ON DELETE SET NULL,
+  net_earnings_ssp   numeric(14, 2) NOT NULL,
+  net_earnings_usd   numeric(12, 2) NOT NULL,
+  paid_at            timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (trip_id)
+);
+
+CREATE INDEX IF NOT EXISTS earnings_driver_idx ON earnings_history (driver_id, paid_at DESC);

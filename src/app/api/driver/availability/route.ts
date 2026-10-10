@@ -3,6 +3,21 @@ import { requireSession } from "@/lib/auth";
 import { parseBody, fail, ok, serverError, isResponse } from "@/lib/http";
 import { availabilitySchema } from "@/lib/validation";
 
+/** Driver: current online state and vehicle details. */
+export async function GET(req: Request) {
+  const session = await requireSession(req, ["driver"]);
+  if (isResponse(session)) return session;
+  try {
+    const rows = await query<{ is_online: boolean; vehicle_type: string | null; plate_number: string | null }>(
+      "SELECT is_online, vehicle_type, plate_number FROM driver_profiles WHERE user_id = $1",
+      [session.id],
+    );
+    return ok({ availability: rows[0] ?? { is_online: false, vehicle_type: null, plate_number: null } });
+  } catch (err) {
+    return serverError("driver availability get", err);
+  }
+}
+
 /** Driver: go online or offline. Cannot go offline in the middle of a trip. */
 export async function POST(req: Request) {
   const session = await requireSession(req, ["driver"]);

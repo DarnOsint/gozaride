@@ -72,15 +72,28 @@ export function startTrip(tripId: string, driverId: string) {
   );
 }
 
-export function completeTrip(tripId: string, driverId: string) {
-  return guardedUpdate(
-    tripId,
-    `UPDATE trips SET status = 'completed', completed_at = now()
-      WHERE id = $1 AND driver_id = $2 AND status = 'in_progress'
-      RETURNING id`,
-    [tripId, driverId],
-    "This trip is not in progress",
-  );
+/** Complete a trip and record the driver's net earnings (fare minus platform commission). */
+export async function completeTrip(tripId: string, driverId: string): Promise<Result<string>> {
+  return withTx(async (db) => {
+    const done = await db.query(
+      `UPDATE trips SET status = 'completed', completed_at = now()
+        WHERE id = $1 AND driver_id = $2 AND status = 'in_progress'
+        RETURNING id, fare_usd::float8 AS fare_usd, exchange_rate_ssp_per_usd::float8 AS rate,
+                  commission_rate::float8 AS commission`,
+      [tripId, driverId],
+    );
+    const trip = done.rows[0];
+    if (!trip) return bad(409, "This trip is not in progress");
+
+    const netUsd = Math.round(trip.fare_usd * (1 - trip.commission) * 100) / 100;
+    const netSsp = Math.round(netUsd * trip.rate * 100) / 100;
+    await db.query(
+      `INSERT INTO earnings_history (driver_id, trip_id, net_earnings_ssp, net_earnings_usd)
+       VALUES ($1, $2, $3, $4)`,
+      [driverId, tripId, netSsp, netUsd],
+    );
+    return good(tripId);
+  });
 }
 
 /** Customers may cancel before the trip starts. Drivers may cancel an accepted trip. */

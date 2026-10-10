@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   const session = await requireSession(req);
   if (isResponse(session)) return session;
 
-  const body = await parseBody(req, z.object({ usd: z.number().positive().max(1_000_000) }));
+  const body = await parseBody(req, convertSchema);
   if (isResponse(body)) return body;
 
   try {

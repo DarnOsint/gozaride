@@ -1,6 +1,6 @@
 import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth";
-import { parseBody, fail, ok, serverError, isResponse } from "@/lib/http";
+import { parseBody, ok, serverError, isResponse } from "@/lib/http";
 import { z } from "zod";
 
 const toggleSchema = z.object({ is_active: z.boolean() });
@@ -10,7 +10,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (isResponse(session)) return session;
 
   const { id } = await ctx.params;
-  const body = await parseBody(req, z.object({ is_active: z.boolean() }));
+  const body = await parseBody(req, toggleSchema);
   if (isResponse(body)) return body;
 
   try {

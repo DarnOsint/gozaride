@@ -1,4 +1,4 @@
-import { query, queryOne } from "@/lib/db";
+import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth";
 import { ok, serverError, isResponse } from "@/lib/http";
 import { TRIP_COLUMNS } from "@/lib/trips";

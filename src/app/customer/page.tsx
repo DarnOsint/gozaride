@@ -47,7 +47,7 @@ function CustomerDashboard({ token }: { token: string }) {
     load().catch((e) => setMessage(e instanceof Error ? e.message : "Could not load trips"));
   }, [load]);
 
-  function useMyLocation(setter: (p: { lat: number; lng: number }) => void) {
+  function locate(setter: (p: { lat: number; lng: number }) => void) {
     if (!navigator.geolocation) {
       setMessage("Your browser cannot share location. Enter coordinates instead.");
       return;
@@ -119,7 +119,7 @@ function CustomerDashboard({ token }: { token: string }) {
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Pickup</legend>
             <input className={field} placeholder="Pickup name (optional)" value={originName} onChange={(e) => setOriginName(e.target.value)} />
-            <button type="button" onClick={() => useMyLocation(setOrigin)} className="text-sm text-orange-600 hover:underline">
+            <button type="button" onClick={() => locate(setOrigin)} className="text-sm text-orange-600 hover:underline">
               {origin ? `Pickup set (${origin.lat.toFixed(4)}, ${origin.lng.toFixed(4)})` : "Use my current location"}
             </button>
           </fieldset>
@@ -127,7 +127,7 @@ function CustomerDashboard({ token }: { token: string }) {
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Destination</legend>
             <input className={field} placeholder="Destination name (optional)" value={destName} onChange={(e) => setDestName(e.target.value)} />
-            <button type="button" onClick={() => useMyLocation(setDest)} className="text-sm text-orange-600 hover:underline">
+            <button type="button" onClick={() => locate(setDest)} className="text-sm text-orange-600 hover:underline">
               {dest ? `Destination set (${dest.lat.toFixed(4)}, ${dest.lng.toFixed(4)})` : "Use my current location"}
             </button>
           </fieldset>

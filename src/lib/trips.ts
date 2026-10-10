@@ -21,6 +21,7 @@ export const TRIP_COLUMNS = `
   round(t.fare_usd * t.exchange_rate_ssp_per_usd, 2)::float8 AS fare_ssp,
   t.commission_rate::float8 AS commission_rate,
   round(t.fare_usd * (1 - t.commission_rate), 2)::float8 AS driver_earnings_usd,
+  round(t.fare_usd * (1 - t.commission_rate) * t.exchange_rate_ssp_per_usd, 2)::float8 AS driver_earnings_ssp,
   t.requested_at,
   t.accepted_at,
   t.started_at,

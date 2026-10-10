@@ -19,6 +19,42 @@ export const signUpSchema = z.object({
     .optional(),
   // Admins cannot self-register. An existing admin must create them.
   role: z.enum(["customer", "driver", "shop"]),
+  shop_name: z.string().trim().min(2).max(120).optional(),
+});
+
+export const shopProfileSchema = z.object({
+  shop_name: z.string().trim().min(2).max(120),
+  address: z.string().trim().max(300).optional(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  is_open: z.boolean().default(true),
+});
+
+export const productSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().trim().max(2000).optional(),
+  price_usd: z.number().nonnegative().max(1_000_000),
+  category: z.enum(["food", "grocery", "electronics", "clothing", "other"]),
+  image_url: z.string().url().max(500).optional(),
+  stock_quantity: z.number().int().nonnegative().max(1_000_000).default(0),
+  is_active: z.boolean().default(true),
+});
+
+export const shopOrderSchema = z.object({
+  shop_id: z.string().uuid(),
+  items: z
+    .array(z.object({ product_id: z.string().uuid(), quantity: z.number().int().positive().max(100) }))
+    .min(1)
+    .max(50),
+  delivery_address: z.string().trim().min(5).max(300),
+  delivery_lat: z.number().min(-90).max(90),
+  delivery_lng: z.number().min(-180).max(180),
+  notes: z.string().trim().max(500).optional(),
+});
+
+export const orderStatusSchema = z.object({
+  status: z.enum(["confirmed", "preparing", "ready_for_pickup", "out_for_delivery", "delivered", "cancelled"]),
+  reason: z.string().trim().max(300).optional(),
 });
 
 export const signInSchema = z.object({

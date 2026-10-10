@@ -39,3 +39,18 @@ export function serverError(context: string, err: unknown) {
 export function isResponse(v: unknown): v is Response {
   return v instanceof Response;
 }
+
+/** Throw inside a transaction to abort it with a specific HTTP status. */
+export class HttpError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export function failFromError(err: unknown, context: string): Response {
+  if (err instanceof HttpError) return fail(err.status, err.message);
+  return serverError(context, err);
+}

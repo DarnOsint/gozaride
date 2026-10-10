@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { RequireRole } from "@/components/RequireRole";
 import { useAuth } from "@/context/AuthContext";
-import { api, ApiError, money, ssp } from "@/lib/client";
+import { api, money, ssp } from "@/lib/client";
 
 type Trip = {
   id: string;
@@ -23,6 +23,8 @@ type Trip = {
   completed_at: string | null;
 };
 
+type OpenTrip = Trip & { pickup_distance_km: number | null };
+
 type Earnings = {
   total_usd: number;
   total_ssp: number;
@@ -32,13 +34,11 @@ type Earnings = {
 
 function DriverDashboard({ token }: { token: string }) {
   const [online, setOnline] = useState(false);
-  const [loadingOnline, setLoadingOnline] = useState(true);
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
-  const [openTrips, setOpenTrips] = useState<any[]>([]);
-  const [history, setHistory] = useState<any[]>([]);
+  const [openTrips, setOpenTrips] = useState<OpenTrip[]>([]);
+  const [history, setHistory] = useState<Trip[]>([]);
   const [earnings, setEarnings] = useState<Earnings | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const loadOnline = useCallback(async () => {
@@ -47,15 +47,13 @@ function DriverDashboard({ token }: { token: string }) {
       setOnline(res.availability.is_online);
     } catch {
       setOnline(false);
-    } finally {
-      setLoadingOnline(false);
     }
   }, [token]);
 
   const loadOpen = useCallback(async () => {
     try {
-      const data = await api<any[]>("/api/trips/available", { token });
-      setOpenTrips(data);
+      const data = await api<{ trips: OpenTrip[] }>("/api/trips/available", { token });
+      setOpenTrips(data.trips);
     } catch {
       setOpenTrips([]);
     }
@@ -63,7 +61,7 @@ function DriverDashboard({ token }: { token: string }) {
 
   const loadHistory = useCallback(async () => {
     try {
-      const data = await api<{ trips: any[] }>("/api/trips?status=completed&limit=20", { token });
+      const data = await api<{ trips: Trip[] }>("/api/trips?status=completed&limit=20", { token });
       setHistory(data.trips);
     } catch {
       setHistory([]);
@@ -72,8 +70,8 @@ function DriverDashboard({ token }: { token: string }) {
 
   const loadEarnings = useCallback(async () => {
     try {
-      const data = await api<{ earnings: { total_usd: number; total_ssp: number; this_week_usd: number; this_week_ssp: number } }>("/api/driver/earnings", { token });
-      setEarnings(data.earnings);
+      const data = await api<Earnings>("/api/driver/earnings", { token });
+      setEarnings(data);
     } catch {
       setEarnings(null);
     }
@@ -81,8 +79,8 @@ function DriverDashboard({ token }: { token: string }) {
 
   const loadActive = useCallback(async () => {
     try {
-      const data = await api<{ trips: any[] }>("/api/trips?status=accepted,in_progress&limit=1", { token });
-      if (data.trips.length > 0) setActiveTrip(data.trips[0]);
+      const data = await api<{ trips: Trip[] }>("/api/trips?status=accepted,in_progress&limit=1", { token });
+      setActiveTrip(data.trips[0] ?? null);
     } catch {
       setActiveTrip(null);
     }
@@ -103,13 +101,15 @@ function DriverDashboard({ token }: { token: string }) {
     }
   }, [online, loadOpen, loadActive]);
 
+  // Keep the driver's position live while the page is open.
   useEffect(() => {
     if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
+    const id = navigator.geolocation.watchPosition(
       (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {},
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 5000 },
     );
+    return () => navigator.geolocation.clearWatch(id);
   }, []);
 
   const reportLocation = useCallback(async () => {
@@ -170,7 +170,6 @@ function DriverDashboard({ token }: { token: string }) {
   }
 
   const actionBtn = "rounded-xl bg-orange-600 px-4 py-2 font-medium text-white hover:bg-orange-700";
-  const secondaryBtn = "rounded-xl border border-gray-300 px-4 py-2 font-medium hover:bg-gray-50";
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">

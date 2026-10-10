@@ -5,8 +5,12 @@ import { signToken } from "@/lib/auth";
 import { signUpSchema } from "@/lib/validation";
 import { clientIp, hitLimit } from "@/lib/rateLimit";
 
+function signupLimit(): number {
+  return Number(process.env.SIGNUP_LIMIT_PER_HOUR ?? 10);
+}
+
 export async function POST(req: Request) {
-  if (!hitLimit(`signup:${clientIp(req)}`, 10, 60 * 60 * 1000)) {
+  if (!hitLimit(`signup:${clientIp(req)}`, signupLimit(), 60 * 60 * 1000)) {
     return fail(429, "Too many sign-up attempts. Try again later.");
   }
   const body = await parseBody(req, signUpSchema);
@@ -31,8 +35,15 @@ export async function POST(req: Request) {
         [body.email, passwordHash, body.full_name, body.phone ?? null, body.role],
       );
       const u = inserted.rows[0];
+      await db.query("INSERT INTO wallets (user_id) VALUES ($1)", [u.id]);
       if (u.role === "driver") {
         await db.query("INSERT INTO driver_profiles (user_id) VALUES ($1)", [u.id]);
+      }
+      if (u.role === "shop") {
+        await db.query(
+          "INSERT INTO shop_profiles (user_id, shop_name) VALUES ($1, $2)",
+          [u.id, body.shop_name ?? body.full_name],
+        );
       }
       return u;
     });

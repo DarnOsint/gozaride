@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { RequireRole } from "@/components/RequireRole";
 import { useAuth } from "@/context/AuthContext";
-import { api, ApiError, money } from "@/lib/client";
+import { api } from "@/lib/client";
 
 type User = {
   id: string;
@@ -30,25 +30,24 @@ function AdminPanel({ token }: { token: string }) {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [rate, setRate] = useState<{ ssp_per_usd: number } | null>(null);
   const [newRate, setNewRate] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const [usersRes, tripsRes, rateRes] = await Promise.all([
-        api<User[]>("/api/admin/users", { token }),
-        api<any[]>("/api/admin/trips?limit=50", { token }),
+        api<{ users: User[] }>("/api/admin/users?limit=100", { token }),
+        api<{ trips: Trip[] }>("/api/admin/trips?limit=50", { token }),
         api<{ ssp_per_usd: number }>("/api/rates", {}),
       ]);
-      setUsers(usersRes);
-      setTrips(tripsRes);
+      setUsers(usersRes.users);
+      setTrips(tripsRes.trips);
       setRate(rateRes);
     } catch (e) {
       console.error(e);
     }
-  }
+  }, [token]);
 
-  useEffect(() => { load(); }, [token]);
+  useEffect(() => { load(); }, [load]);
 
   async function setNewRateValue() {
     const val = Number(newRate);

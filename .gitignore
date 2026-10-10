@@ -32,3 +32,6 @@ docker-compose.override.yml
 
 # Mac
 .DS_Store
+
+# TypeScript build info
+*.tsbuildinfo

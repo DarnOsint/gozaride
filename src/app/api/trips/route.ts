@@ -89,8 +89,14 @@ export async function GET(req: Request) {
     where.push(`t.driver_id = $${params.length}`);
   }
   if (status) {
-    params.push(status);
-    where.push(`t.status = $${params.length}`);
+    // Accepts one status or a comma-separated list, e.g. "accepted,in_progress".
+    const allowed = ["pending", "accepted", "in_progress", "completed", "cancelled"];
+    const wanted = status.split(",").map((s) => s.trim()).filter(Boolean);
+    if (wanted.length === 0 || wanted.some((s) => !allowed.includes(s))) {
+      return fail(422, "Unknown trip status");
+    }
+    params.push(wanted);
+    where.push(`t.status = ANY($${params.length}::text[])`);
   }
   params.push(limit);
 
