@@ -5,6 +5,7 @@ import { RequireRole } from "@/components/RequireRole";
 import { useAuth } from "@/context/AuthContext";
 import { api, money, ssp } from "@/lib/client";
 import { MapView } from "@/components/MapView";
+import { SafetyControls } from "@/components/SafetyControls";
 
 type Trip = {
   id: string;
@@ -329,6 +330,7 @@ function DriverDashboard({ token }: { token: string }) {
               follow={!!location}
               className="h-56 w-full rounded-xl ring-1 ring-orange-200"
             />
+            <SafetyControls tripId={activeTrip.id} token={token} />
           </div>
         </section>
       )}

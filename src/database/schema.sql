@@ -283,3 +283,34 @@ CREATE TABLE IF NOT EXISTS referrals (
 );
 
 CREATE INDEX IF NOT EXISTS referrals_referrer_idx ON referrals (referrer_id, created_at DESC);
+
+-- ------------------------------------------------------------- safety
+-- SOS / incident reports raised during a trip.
+CREATE TABLE IF NOT EXISTS safety_incidents (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id         uuid REFERENCES trips (id) ON DELETE SET NULL,
+  reported_by     uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  kind            text NOT NULL DEFAULT 'sos' CHECK (kind IN ('sos', 'unsafe', 'accident', 'other')),
+  latitude        double precision,
+  longitude       double precision,
+  note            text CHECK (note IS NULL OR char_length(note) <= 500),
+  status          text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'acknowledged', 'resolved')),
+  acknowledged_at timestamptz,
+  resolved_at     timestamptz,
+  resolved_by     uuid REFERENCES users (id) ON DELETE SET NULL,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS safety_incidents_status_idx ON safety_incidents (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS safety_incidents_trip_idx ON safety_incidents (trip_id);
+
+-- Read-only trip sharing links for trusted contacts.
+CREATE TABLE IF NOT EXISTS trip_shares (
+  token      text PRIMARY KEY,
+  trip_id    uuid NOT NULL REFERENCES trips (id) ON DELETE CASCADE,
+  created_by uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS trip_shares_trip_idx ON trip_shares (trip_id);

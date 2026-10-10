@@ -101,3 +101,14 @@ export const pushSubscribeSchema = z.object({
     auth: z.string().min(1).max(500),
   }),
 });
+
+export const sosSchema = z.object({
+  kind: z.enum(["sos", "unsafe", "accident", "other"]).default("sos"),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  note: z.string().trim().max(500).optional(),
+});
+
+export const incidentUpdateSchema = z.object({
+  status: z.enum(["acknowledged", "resolved"]),
+});

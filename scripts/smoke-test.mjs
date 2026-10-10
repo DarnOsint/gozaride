@@ -143,6 +143,23 @@ check(
 const liveOther = await api("GET", `/api/trips/${trip.id}/track`, { token: d2 });
 check("unrelated driver cannot track the trip", liveOther.status === 403, JSON.stringify(liveOther));
 
+// 5b. Safety: SOS and read-only trip sharing.
+const sos = await api("POST", `/api/trips/${trip.id}/sos`, {
+  token: customer.json.token,
+  body: { kind: "sos", latitude: 4.855, longitude: 31.61, note: "smoke test" },
+});
+check("customer can raise an SOS", sos.status === 201 && sos.json.incident?.id, JSON.stringify(sos));
+const share = await api("POST", `/api/trips/${trip.id}/share`, { token: customer.json.token, body: {} });
+check("share link created", share.status === 201 && share.json.share?.token, JSON.stringify(share));
+const publicTrack = await api("GET", `/api/track/${share.json.share.token}`);
+check(
+  "public tracking link exposes live trip",
+  publicTrack.status === 200 && publicTrack.json.status === "in_progress" && publicTrack.json.driver_location?.latitude === 4.855,
+  JSON.stringify(publicTrack).slice(0, 200),
+);
+const badTrack = await api("GET", "/api/track/not-a-real-token");
+check("invalid tracking token rejected", badTrack.status === 404, JSON.stringify(badTrack));
+
 const offline = await api("POST", "/api/driver/availability", { token: dt, body: { is_online: false } });
 check("cannot go offline mid-trip", offline.status === 409, JSON.stringify(offline));
 
@@ -230,5 +247,15 @@ const adminTrips = await api("GET", "/api/admin/trips?limit=50", { token: admin.
 check("admin trip list shape", adminTrips.status === 200 && Array.isArray(adminTrips.json.trips), JSON.stringify(adminTrips.json).slice(0, 200));
 const history = await api("GET", "/api/admin/rates", { token: admin.json.token });
 check("admin reads rate history", history.status === 200 && history.json.history.length >= 1);
+
+const safety = await api("GET", "/api/admin/safety", { token: admin.json.token });
+check("admin sees safety incidents", safety.status === 200 && safety.json.incidents.some((i) => i.id === sos.json.incident.id), JSON.stringify(safety.json).slice(0, 200));
+const incident = safety.json.incidents.find((i) => i.id === sos.json.incident.id);
+const ack = await api("POST", `/api/admin/safety/${incident.id}`, { token: admin.json.token, body: { status: "acknowledged" } });
+check("admin acknowledges incident", ack.status === 200 && ack.json.incident.status === "acknowledged", JSON.stringify(ack));
+const resolved = await api("POST", `/api/admin/safety/${incident.id}`, { token: admin.json.token, body: { status: "resolved" } });
+check("admin resolves incident", resolved.status === 200 && resolved.json.incident.status === "resolved", JSON.stringify(resolved));
+const notAdmin = await api("GET", "/api/admin/safety", { token: customer.json.token });
+check("non-admin cannot read safety incidents", notAdmin.status === 403, JSON.stringify(notAdmin));
 
 console.log(`\nall ${passed} checks passed`);

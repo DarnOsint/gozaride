@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { api, ApiError, money, ssp } from "@/lib/client";
 import { SERVICES } from "@/lib/services";
 import { MapView, type MapMarker } from "@/components/MapView";
+import { SafetyControls } from "@/components/SafetyControls";
 
 // Juba, South Sudan — default map centre.
 const JUBA = { lat: 4.8594, lng: 31.5713 };
@@ -86,6 +87,7 @@ function LiveTrip({ tripId, token }: { tripId: string; token: string }) {
           ? `Driver last seen ${new Date(track.driver_location.recorded_at).toLocaleTimeString()}`
           : "Waiting for the driver to start sharing location…"}
       </p>
+      <SafetyControls tripId={tripId} token={token} />
     </div>
   );
 }
