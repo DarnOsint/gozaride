@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { RequireRole } from "@/components/RequireRole";
 import { useAuth } from "@/context/AuthContext";
 import { api, money, ssp } from "@/lib/client";
+import { MapView } from "@/components/MapView";
 
 type Trip = {
   id: string;
@@ -11,6 +12,10 @@ type Trip = {
   status: "pending" | "accepted" | "in_progress" | "completed" | "cancelled";
   origin_name: string | null;
   dest_name: string | null;
+  origin_lat: number;
+  origin_lng: number;
+  dest_lat: number;
+  dest_lng: number;
   distance_km: number;
   eta_minutes: number;
   fare_usd: number;
@@ -306,6 +311,24 @@ function DriverDashboard({ token }: { token: string }) {
                 </button>
               )}
             </div>
+          </div>
+          <div className="mt-4">
+            <MapView
+              center={
+                location ?? {
+                  lat: activeTrip.origin_lat ?? 4.8594,
+                  lng: activeTrip.origin_lng ?? 31.5713,
+                }
+              }
+              zoom={14}
+              markers={[
+                { lat: activeTrip.origin_lat, lng: activeTrip.origin_lng, kind: "pickup", label: activeTrip.origin_name ?? "Pickup" },
+                { lat: activeTrip.dest_lat, lng: activeTrip.dest_lng, kind: "destination", label: activeTrip.dest_name ?? "Destination" },
+                ...(location ? [{ ...location, kind: "driver" as const, label: "You" }] : []),
+              ]}
+              follow={!!location}
+              className="h-56 w-full rounded-xl ring-1 ring-orange-200"
+            />
           </div>
         </section>
       )}

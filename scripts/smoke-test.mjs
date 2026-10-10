@@ -134,6 +134,15 @@ check("trip starts", st.status === 200 && st.json.trip.status === "in_progress",
 const track = await api("POST", "/api/driver/location", { token: dt, body: { latitude: 4.855, longitude: 31.61 } });
 check("location recorded against trip", track.status === 200 && track.json.trip_id === trip.id, JSON.stringify(track));
 
+const live = await api("GET", `/api/trips/${trip.id}/track`, { token: customer.json.token });
+check(
+  "customer can track the active trip",
+  live.status === 200 && live.json.status === "in_progress" && live.json.driver_location?.latitude === 4.855,
+  JSON.stringify(live),
+);
+const liveOther = await api("GET", `/api/trips/${trip.id}/track`, { token: d2 });
+check("unrelated driver cannot track the trip", liveOther.status === 403, JSON.stringify(liveOther));
+
 const offline = await api("POST", "/api/driver/availability", { token: dt, body: { is_online: false } });
 check("cannot go offline mid-trip", offline.status === 409, JSON.stringify(offline));
 
