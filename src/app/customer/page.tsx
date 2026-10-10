@@ -33,6 +33,14 @@ type Track = {
   driver_location: { latitude: number; longitude: number; recorded_at: string } | null;
 };
 
+type Estimate = {
+  distance_km: number;
+  eta_minutes: number;
+  fare_usd: number;
+  fare_ssp: number;
+  ssp_per_usd: number;
+};
+
 const SERVICE_KEYS = Object.keys(SERVICES);
 const ACTIVE = ["pending", "accepted", "in_progress"];
 
@@ -107,6 +115,8 @@ function CustomerDashboard({ token }: { token: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState<"origin" | "dest" | null>(null);
+  const [estimate, setEstimate] = useState<Estimate | null>(null);
+  const [estimating, setEstimating] = useState(false);
 
   const load = useCallback(async () => {
     const data = await api<{ trips: Trip[] }>("/api/trips?limit=20", { token });
@@ -176,6 +186,33 @@ function CustomerDashboard({ token }: { token: string }) {
   if (origin) markers.push({ ...origin, kind: "pickup", label: originName || "Pickup" });
   if (dest) markers.push({ ...dest, kind: "destination", label: destName || "Destination" });
   const mapCenter = origin ?? dest ?? JUBA;
+
+  useEffect(() => {
+    let alive = true;
+    async function fetchEstimate() {
+      if (!origin || !dest) {
+        if (alive) setEstimate(null);
+        return;
+      }
+      setEstimating(true);
+      try {
+        const res = await api<Estimate>("/api/trips/estimate", {
+          token,
+          body: { service_type: service, origin, destination: dest },
+        });
+        if (alive) setEstimate(res);
+      } catch {
+        if (alive) setEstimate(null);
+      } finally {
+        if (alive) setEstimating(false);
+      }
+    }
+    const id = setTimeout(fetchEstimate, 400);
+    return () => {
+      alive = false;
+      clearTimeout(id);
+    };
+  }, [origin, dest, service, token]);
 
   function pickAt(p: { lat: number; lng: number }) {
     if (picking === "origin") {
@@ -247,6 +284,25 @@ function CustomerDashboard({ token }: { token: string }) {
               <p className="mt-2 text-xs text-orange-700">
                 Tap the map to set the {picking === "origin" ? "pickup" : "destination"} point.
               </p>
+            )}
+          </div>
+
+                    <div className="rounded-xl bg-gray-50 p-3 text-sm">
+            {estimating && <p className="text-gray-500">Estimating fare...</p>}
+            {!estimating && estimate && (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium">
+                    ~{estimate.distance_km.toFixed(1)} km · {estimate.eta_minutes} min
+                  </p>
+                  <p className="text-gray-600">
+                    Estimated: <span className="font-semibold">{money(estimate.fare_usd)}</span> · {ssp(estimate.fare_ssp)}
+                  </p>
+                </div>
+              </div>
+            )}
+            {!estimating && !estimate && origin && dest && (
+              <p className="text-gray-500">Set service and pickup/destination to see estimate.</p>
             )}
           </div>
 
