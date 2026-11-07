@@ -4,7 +4,7 @@ import type { ServiceType } from "./validation";
 // They can move into platform_settings once the admin panel manages them.
 const TARIFF: Record<ServiceType, { base: number; perKm: number; minimum: number }> = {
   taxi: { base: 2.0, perKm: 0.9, minimum: 3.0 },
-  motorcycle: { base: 1.5, perKm: 0.6, minimum: 2.0 },
+  boda_boda: { base: 1.5, perKm: 0.6, minimum: 2.0 },
   package: { base: 3.0, perKm: 0.8, minimum: 4.0 },
   food: { base: 2.5, perKm: 0.7, minimum: 3.0 },
   rental: { base: 15.0, perKm: 0.25, minimum: 15.0 },

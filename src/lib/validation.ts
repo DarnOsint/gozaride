@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const SERVICE_TYPES = ["taxi", "motorcycle", "package", "food", "rental", "bus"] as const;
+export const SERVICE_TYPES = ["taxi", "boda_boda", "package", "food", "rental", "bus"] as const;
 export type ServiceType = (typeof SERVICE_TYPES)[number];
 
 const lat = z.number().min(-90).max(90);
@@ -87,6 +87,7 @@ export const cancelSchema = z.object({
 export const ratingSchema = z.object({
   stars: z.number().int().min(1).max(5),
   comment: z.string().trim().max(500).optional(),
+  tip_usd: z.number().nonnegative().max(1000).optional().default(0),
 });
 
 export const rateSchema = z.object({

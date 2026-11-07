@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS trips (
   id                          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id                 uuid NOT NULL REFERENCES users (id),
   driver_id                   uuid REFERENCES users (id),
-  service_type                text NOT NULL CHECK (service_type IN ('taxi', 'motorcycle', 'package', 'food', 'rental', 'bus')),
+  service_type                text NOT NULL CHECK (service_type IN ('taxi', 'boda_boda', 'package', 'food', 'rental', 'bus')),
   status                      text NOT NULL DEFAULT 'pending'
                                 CHECK (status IN ('pending', 'accepted', 'in_progress', 'completed', 'cancelled')),
   origin_name                 text CHECK (origin_name IS NULL OR char_length(origin_name) <= 200),
@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS trips (
   fare_usd                    numeric(10, 2) NOT NULL CHECK (fare_usd >= 0),
   exchange_rate_ssp_per_usd   numeric(14, 4) NOT NULL CHECK (exchange_rate_ssp_per_usd > 0),
   commission_rate             numeric(4, 3) NOT NULL DEFAULT 0.200 CHECK (commission_rate BETWEEN 0 AND 1),
+  tip_usd                     numeric(12, 2) NOT NULL DEFAULT 0 CHECK (tip_usd >= 0),
   requested_at                timestamptz NOT NULL DEFAULT now(),
   accepted_at                 timestamptz,
   started_at                  timestamptz,
@@ -219,6 +220,8 @@ CREATE TABLE IF NOT EXISTS earnings_history (
   trip_id            uuid REFERENCES trips (id) ON DELETE SET NULL,
   net_earnings_ssp   numeric(14, 2) NOT NULL,
   net_earnings_usd   numeric(12, 2) NOT NULL,
+  tip_ssp            numeric(14, 2) NOT NULL DEFAULT 0 CHECK (tip_ssp >= 0),
+  tip_usd            numeric(12, 2) NOT NULL DEFAULT 0 CHECK (tip_usd >= 0),
   paid_at            timestamptz NOT NULL DEFAULT now(),
   UNIQUE (trip_id)
 );
@@ -326,3 +329,28 @@ CREATE TABLE IF NOT EXISTS settings (
 
 INSERT INTO settings (key, value) VALUES ('commission_rate', '0.20')
 ON CONFLICT (key) DO NOTHING;
+
+-- ----------------------------------------------------------- migrations
+-- Kept in this file so `npm run db:schema` upgrades an existing database too.
+
+-- v2: motorcycle -> boda_boda. Rewrite existing rows and replace the old check.
+DO $$
+DECLARE c record;
+BEGIN
+  FOR c IN
+    SELECT conname FROM pg_constraint
+     WHERE conrelid = 'trips'::regclass
+       AND contype = 'c'
+       AND pg_get_constraintdef(oid) LIKE '%service_type%'
+  LOOP
+    EXECUTE format('ALTER TABLE trips DROP CONSTRAINT %I', c.conname);
+  END LOOP;
+  UPDATE trips SET service_type = 'boda_boda' WHERE service_type = 'motorcycle';
+  ALTER TABLE trips ADD CONSTRAINT trips_service_type_check
+    CHECK (service_type IN ('taxi', 'boda_boda', 'package', 'food', 'rental', 'bus'));
+END $$;
+
+-- v2: tips. New installs get these from CREATE TABLE above; existing ones here.
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS tip_usd numeric(12, 2) NOT NULL DEFAULT 0 CHECK (tip_usd >= 0);
+ALTER TABLE earnings_history ADD COLUMN IF NOT EXISTS tip_ssp numeric(14, 2) NOT NULL DEFAULT 0 CHECK (tip_ssp >= 0);
+ALTER TABLE earnings_history ADD COLUMN IF NOT EXISTS tip_usd numeric(12, 2) NOT NULL DEFAULT 0 CHECK (tip_usd >= 0);

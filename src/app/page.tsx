@@ -4,7 +4,7 @@ export const metadata = { title: "Move Easy. Go Anywhere." };
 
 const SERVICES = [
   { href: "/services/taxi", icon: "🚕", name: "Taxi rides", text: "Book a ride to anywhere in town with a verified driver." },
-  { href: "/services/motorcycle", icon: "🛵", name: "Motorcycle delivery", text: "Documents and small parcels, delivered fast." },
+  { href: "/services/boda-boda", icon: "🛵", name: "Boda Boda delivery", text: "Documents and small parcels, delivered fast." },
   { href: "/services/package", icon: "📦", name: "Package delivery", text: "Send larger parcels with tracking from pickup to drop-off." },
   { href: "/services/food", icon: "🍔", name: "Food delivery", text: "Meals from local restaurants, brought to your door." },
   { href: "/services/rental", icon: "🚗", name: "Car rental", text: "Self-drive and with-driver rentals for any occasion." },

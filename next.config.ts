@@ -1,6 +1,9 @@
 const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  async redirects() {
+    return [{ source: "/services/motorcycle", destination: "/services/boda-boda", permanent: true }];
+  },
   async headers() {
     return [
       {

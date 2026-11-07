@@ -201,12 +201,16 @@ export async function cancelTrip(
   return res;
 }
 
-/** Store a rating after completion. Driver averages are recalculated from the ratings table. */
+/**
+ * Store a rating after completion. Driver averages are recalculated from the ratings table.
+ * A customer may include a tip, paid from their USD wallet into the driver's.
+ */
 export async function rateTrip(
   tripId: string,
   rater: { id: string; role: "customer" | "driver" },
   stars: number,
   comment: string | undefined,
+  tipUsd = 0,
 ): Promise<Result<{ ratee_id: string }>> {
   const trip = await getTrip(tripId);
   if (!trip) return bad(404, "Trip not found");
@@ -217,20 +221,46 @@ export async function rateTrip(
   if (!isCustomer && !isDriver) return bad(403, "You were not part of this trip");
 
   const rateeId = isCustomer ? trip.driver_id! : trip.customer_id;
+  const tip = Math.round(Math.max(0, tipUsd) * 100) / 100;
 
   return withTx(async (db) => {
-    try {
-      await db.query(
-        `INSERT INTO ratings (trip_id, rater_id, ratee_id, stars, comment)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [tripId, rater.id, rateeId, stars, comment ?? null],
+    // Checked before any write: a `bad` result is committed by withTx.
+    const already = await db.query("SELECT 1 FROM ratings WHERE trip_id = $1 AND rater_id = $2", [
+      tripId,
+      rater.id,
+    ]);
+    if (already.rowCount) return bad(409, "You have already rated this trip");
+
+    if (isCustomer && tip > 0) {
+      const debited = await db.query(
+        `UPDATE wallets SET usd_balance = usd_balance - $1
+          WHERE user_id = $2 AND usd_balance >= $1
+          RETURNING user_id`,
+        [tip, rater.id],
       );
-    } catch (err) {
-      if ((err as { code?: string }).code === "23505") {
-        return bad(409, "You have already rated this trip");
-      }
-      throw err;
+      if (!debited.rowCount) return bad(409, "Not enough wallet balance for that tip");
+      await db.query(`INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, [
+        rateeId,
+      ]);
+      await db.query(`UPDATE wallets SET usd_balance = usd_balance + $1 WHERE user_id = $2`, [
+        tip,
+        rateeId,
+      ]);
+      const tipSsp = Math.round(tip * trip.exchange_rate_ssp_per_usd * 100) / 100;
+      await db.query(`UPDATE trips SET tip_usd = $1 WHERE id = $2`, [tip, tripId]);
+      await db.query(
+        `UPDATE earnings_history SET tip_usd = $1, tip_ssp = $2
+          WHERE trip_id = $3 AND driver_id = $4`,
+        [tip, tipSsp, tripId, rateeId],
+      );
     }
+
+    // A concurrent duplicate throws 23505 and rolls the wallet transfer back.
+    await db.query(
+      `INSERT INTO ratings (trip_id, rater_id, ratee_id, stars, comment)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [tripId, rater.id, rateeId, stars, comment ?? null],
+    );
     if (isCustomer) {
       await db.query(
         `UPDATE driver_profiles d

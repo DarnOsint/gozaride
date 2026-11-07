@@ -13,7 +13,10 @@ if (ADMIN_PASSWORD.length < 12) {
   process.exit(1);
 }
 
-const client = new pg.Client({ connectionString: DATABASE_URL });
+const client = new pg.Client({
+  connectionString: DATABASE_URL,
+  ssl: DATABASE_URL.includes("neon.tech") ? { rejectUnauthorized: false } : undefined,
+});
 await client.connect();
 try {
   const hash = await bcrypt.hash(ADMIN_PASSWORD, 12);

@@ -20,6 +20,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       { id: session.id, role: session.role as "customer" | "driver" },
       body.stars,
       body.comment,
+      body.tip_usd,
     );
     if (!res.ok) return fail(res.status, res.message);
     return ok({ rated_user_id: res.value.ratee_id }, 201);

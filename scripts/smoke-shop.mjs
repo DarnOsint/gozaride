@@ -154,7 +154,7 @@ check("cancelled stock returned (8 -> 5 -> 8)", restored.json.products[0].stock_
 
 // Driver pickup and delivery.
 const dt = driver.json.token;
-let r = await api("POST", "/api/driver/availability", { token: dt, body: { is_online: true, vehicle_type: "motorcycle" } });
+let r = await api("POST", "/api/driver/availability", { token: dt, body: { is_online: true, vehicle_type: "boda_boda" } });
 check("driver online", r.status === 200, JSON.stringify(r));
 const notReady = await api("POST", `/api/shop/orders/${order.id}/claim`, { token: dt });
 check("cannot claim before ready", notReady.status === 409, JSON.stringify(notReady));

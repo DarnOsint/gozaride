@@ -63,7 +63,7 @@
 --   "destination": { "lat": 4.5, "lng": 31.0 },
 --   "origin_name": "Home",
 --   "destination_name": "Airport",
---   "trip_type": "taxi" | "motorcycle" | "package" | "food" | "rental" | "bus",
+--   "trip_type": "taxi" | "boda_boda" | "package" | "food" | "rental" | "bus",
 --   "pickup_window_minutes": 15, -- optional
 --   "notes": "Need help with luggage" -- optional
 -- }

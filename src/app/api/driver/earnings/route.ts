@@ -8,14 +8,14 @@ export async function GET(req: Request) {
 
   try {
     const total = await queryOne<{ total_usd: number; total_ssp: number }>(
-      `SELECT COALESCE(SUM(net_earnings_usd), 0)::float8 AS total_usd,
-              COALESCE(SUM(net_earnings_ssp), 0)::float8 AS total_ssp
+      `SELECT COALESCE(SUM(net_earnings_usd + tip_usd), 0)::float8 AS total_usd,
+              COALESCE(SUM(net_earnings_ssp + tip_ssp), 0)::float8 AS total_ssp
          FROM earnings_history WHERE driver_id = $1`,
       [session.id],
     );
     const week = await queryOne<{ week_usd: number; week_ssp: number }>(
-      `SELECT COALESCE(SUM(net_earnings_usd), 0)::float8 AS week_usd,
-              COALESCE(SUM(net_earnings_ssp), 0)::float8 AS week_ssp
+      `SELECT COALESCE(SUM(net_earnings_usd + tip_usd), 0)::float8 AS week_usd,
+              COALESCE(SUM(net_earnings_ssp + tip_ssp), 0)::float8 AS week_ssp
          FROM earnings_history
         WHERE driver_id = $1 AND paid_at >= now() - interval '7 days'`,
       [session.id],

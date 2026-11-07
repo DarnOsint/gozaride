@@ -12,11 +12,11 @@ export const SERVICES: Record<string, ServiceInfo> = {
       "Rate your driver after every trip",
     ],
   },
-  motorcycle: {
-    slug: "motorcycle",
-    title: "Motorcycle delivery",
+  boda_boda: {
+    slug: "boda_boda",
+    title: "Boda Boda delivery",
     icon: "🛵",
-    summary: "Fast delivery of documents and small parcels by verified motorcycle riders.",
+    summary: "Fast delivery of documents and small parcels by verified boda boda riders.",
     bullets: ["Pickup and drop-off addresses on the map", "Estimated arrival before pickup", "Proof of delivery in the app"],
   },
   package: {

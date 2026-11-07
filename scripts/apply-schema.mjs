@@ -14,7 +14,10 @@ if (!url) {
 }
 
 const sql = await readFile(schemaPath, "utf8");
-const client = new pg.Client({ connectionString: url });
+const client = new pg.Client({
+  connectionString: url,
+  ssl: url.includes("neon.tech") ? { rejectUnauthorized: false } : undefined,
+});
 await client.connect();
 try {
   await client.query("BEGIN");

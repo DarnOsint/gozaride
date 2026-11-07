@@ -16,6 +16,7 @@ export function getPool(): Pool {
       max: Number(process.env.PG_POOL_MAX ?? 10),
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
+      ssl: url.includes("neon.tech") ? { rejectUnauthorized: false } : undefined,
     });
     pool.on("error", (err) => {
       console.error("[db] idle client error", err.message);

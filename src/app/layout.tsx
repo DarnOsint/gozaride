@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     template: "%s | Gozaride",
   },
   description:
-    "Gozaride connects you to taxi rides, motorcycle and package delivery, food, car rental and transport across South Sudan.",
+    "Gozaride connects you to taxi rides, boda boda and package delivery, food, car rental and transport across South Sudan.",
   manifest: "/manifest.json",
   applicationName: "Gozaride",
   appleWebApp: { capable: true, title: "Gozaride", statusBarStyle: "default" },

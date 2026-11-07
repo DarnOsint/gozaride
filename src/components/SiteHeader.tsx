@@ -7,7 +7,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 
 const PUBLIC_LINKS = [
   { href: "/services/taxi", label: "Taxi" },
-  { href: "/services/motorcycle", label: "Motorcycle" },
+  { href: "/services/boda-boda", label: "Boda Boda" },
   { href: "/services/package", label: "Package" },
   { href: "/services/food", label: "Food" },
   { href: "/services/rental", label: "Car rental" },

@@ -82,6 +82,8 @@ export async function GET(req: Request) {
 
   const where: string[] = [];
   const params: unknown[] = [];
+  params.push(session.id);
+  const raterParam = params.length;
   if (session.role === "customer") {
     params.push(session.id);
     where.push(`t.customer_id = $${params.length}`);
@@ -103,7 +105,11 @@ export async function GET(req: Request) {
 
   try {
     const rows = await query(
-      `SELECT ${TRIP_COLUMNS} FROM trips t
+      `SELECT ${TRIP_COLUMNS},
+              EXISTS (
+                SELECT 1 FROM ratings r WHERE r.trip_id = t.id AND r.rater_id = $${raterParam}
+              ) AS rated_by_me
+         FROM trips t
         ${where.length ? "WHERE " + where.join(" AND ") : ""}
         ORDER BY t.requested_at DESC
         LIMIT $${params.length}`,

@@ -22,6 +22,8 @@ type Trip = {
   eta_minutes: number;
   fare_usd: number;
   fare_ssp: number;
+  tip_usd: number;
+  rated_by_me: boolean;
   requested_at: string;
 };
 
@@ -97,6 +99,71 @@ function LiveTrip({ tripId, token }: { tripId: string; token: string }) {
       </p>
       <SafetyControls tripId={tripId} token={token} />
     </div>
+  );
+}
+
+/** Rate a completed trip and optionally tip the driver from the USD wallet. */
+function RateTrip({ tripId, token, onDone }: { tripId: string; token: string; onDone: () => void }) {
+  const [stars, setStars] = useState(5);
+  const [tip, setTip] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/trips/${tripId}/rate`, {
+        token,
+        method: "POST",
+        body: { stars, tip_usd: tip ? Number(tip) : 0 },
+      });
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not submit rating");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3 border-t border-gray-100 pt-3">
+      <label className="text-sm text-gray-600">
+        Rating
+        <select
+          value={stars}
+          onChange={(e) => setStars(Number(e.target.value))}
+          className="ml-2 rounded-lg border border-gray-300 px-2 py-1"
+        >
+          {[5, 4, 3, 2, 1].map((n) => (
+            <option key={n} value={n}>
+              {n} ★
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="text-sm text-gray-600">
+        Tip (USD)
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={tip}
+          onChange={(e) => setTip(e.target.value)}
+          placeholder="0.00"
+          className="ml-2 w-24 rounded-lg border border-gray-300 px-2 py-1"
+        />
+      </label>
+      <button
+        type="submit"
+        disabled={busy}
+        className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-800 disabled:opacity-50"
+      >
+        {busy ? "Sending..." : "Rate & tip"}
+      </button>
+      {error && <p className="w-full text-sm text-red-600">{error}</p>}
+    </form>
   );
 }
 
@@ -341,6 +408,12 @@ function CustomerDashboard({ token }: { token: string }) {
                 </button>
               )}
               {ACTIVE.includes(t.status) && t.status !== "pending" && <LiveTrip tripId={t.id} token={token} />}
+              {t.status === "completed" && t.tip_usd > 0 && (
+                <p className="mt-1 text-sm text-green-700">Tip sent: {money(t.tip_usd)}</p>
+              )}
+              {t.status === "completed" && !t.rated_by_me && (
+                <RateTrip tripId={t.id} token={token} onDone={load} />
+              )}
             </li>
           ))}
         </ul>
