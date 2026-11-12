@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -21,10 +22,16 @@ const DASHBOARD_BY_ROLE: Record<string, { href: string; label: string }> = {
   admin: { href: "/nen", label: "Admin" },
 };
 
+const AUTH_ROUTES = new Set(["/signin", "/signup"]);
+
 export function SiteHeader() {
   const { user, ready, signOut } = useAuth();
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
   const dashboard = user ? DASHBOARD_BY_ROLE[user.role] : null;
+
+  // Auth screens are a focused entry point for the installed PWA.
+  if (AUTH_ROUTES.has(pathname)) return null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur">
