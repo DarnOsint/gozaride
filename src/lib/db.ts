@@ -15,7 +15,9 @@ export function getPool(): Pool {
       connectionString: url,
       max: Number(process.env.PG_POOL_MAX ?? 10),
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
+      // Neon can take a few seconds to wake a suspended database; 5s caused
+      // the first request after a quiet period to fail.
+      connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS ?? 10_000),
       ssl: url.includes("neon.tech") ? { rejectUnauthorized: false } : undefined,
     });
     pool.on("error", (err) => {
