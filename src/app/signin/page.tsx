@@ -1,18 +1,24 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { dashboardFor } from "@/lib/roles";
 
 export default function SignInPage() {
-  const { signIn } = useAuth();
+  const { signIn, user, ready } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // The PWA launches here, so skip the form when a session is already restored.
+  useEffect(() => {
+    if (ready && user) router.replace(dashboardFor(user.role));
+  }, [ready, user, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -31,7 +37,15 @@ export default function SignInPage() {
   return (
     <div className="mx-auto max-w-md px-4 py-16">
       <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200">
-        <h1 className="text-2xl font-bold">Sign in</h1>
+        <Image
+          src="/icons/icon-192.png"
+          alt="Gozaride"
+          width={56}
+          height={56}
+          priority
+          className="mx-auto rounded-2xl"
+        />
+        <h1 className="mt-4 text-center text-2xl font-bold">Sign in</h1>
         <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate={false}>
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Email</span>
@@ -68,12 +82,13 @@ export default function SignInPage() {
             {busy ? "Signing in..." : "Sign in"}
           </button>
         </form>
-        <p className="mt-6 text-center text-sm text-gray-600">
-          New to Gozaride?{" "}
-          <Link href="/signup" className="font-medium text-orange-600 hover:underline">
-            Create an account
-          </Link>
-        </p>
+        <p className="mt-6 text-center text-sm text-gray-600">New to Gozaride?</p>
+        <Link
+          href="/signup"
+          className="mt-2 block w-full rounded-xl border border-orange-600 py-3 text-center font-medium text-orange-600 hover:bg-orange-50"
+        >
+          Register
+        </Link>
       </div>
     </div>
   );

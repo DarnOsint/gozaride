@@ -13,7 +13,7 @@ const ROLE_OPTIONS: { value: Exclude<Role, "admin">; label: string; help: string
 ];
 
 export default function SignUpPage() {
-  const { signUp } = useAuth();
+  const { signUp, user, ready } = useAuth();
   const router = useRouter();
   const [role, setRole] = useState<Exclude<Role, "admin">>("customer");
   const [fullName, setFullName] = useState("");
@@ -30,6 +30,10 @@ export default function SignUpPage() {
     const ref = new URLSearchParams(window.location.search).get("ref");
     if (ref) setReferral(ref.toUpperCase());
   }, []);
+
+  useEffect(() => {
+    if (ready && user) router.replace(dashboardFor(user.role));
+  }, [ready, user, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();

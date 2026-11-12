@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LaunchRedirect } from "@/components/LaunchRedirect";
 
 export const metadata = { title: "Move Easy. Go Anywhere." };
 
@@ -14,6 +15,7 @@ const SERVICES = [
 export default function HomePage() {
   return (
     <div>
+      <LaunchRedirect />
       <section className="bg-gradient-to-b from-orange-50 to-white px-4 py-20 text-center">
         <h1 className="mx-auto max-w-3xl text-5xl font-bold tracking-tight md:text-6xl">
           Move Easy. <span className="text-orange-600">Go Anywhere.</span>
