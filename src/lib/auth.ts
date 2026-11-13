@@ -6,7 +6,8 @@ export type Role = "customer" | "driver" | "shop" | "admin";
 
 export type Session = {
   id: string;
-  email: string;
+  email: string | null;
+  phone: string | null;
   full_name: string;
   role: Role;
   default_currency: "usd" | "ssp";
@@ -41,18 +42,23 @@ export function bearerToken(req: Request): string | null {
 export async function sessionFrom(req: Request): Promise<Session | null> {
   const token = bearerToken(req);
   if (!token) return null;
-  let payload: { sub?: string };
+  let payload: { sub?: string; iat?: number };
   try {
-    payload = jwt.verify(token, secret(), { algorithms: ["HS256"] }) as { sub?: string };
+    payload = jwt.verify(token, secret(), { algorithms: ["HS256"] }) as {
+      sub?: string;
+      iat?: number;
+    };
   } catch {
     return null;
   }
   if (!payload.sub) return null;
+  // Tokens issued before the last password change are no longer valid.
   return queryOne<Session>(
-    `SELECT id, email, full_name, role, default_currency
+    `SELECT id, email, phone, full_name, role, default_currency
        FROM users
-      WHERE id = $1 AND is_active`,
-    [payload.sub],
+      WHERE id = $1 AND is_active
+        AND (password_changed_at IS NULL OR password_changed_at <= to_timestamp($2))`,
+    [payload.sub, payload.iat ?? 0],
   );
 }
 

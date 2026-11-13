@@ -6,22 +6,31 @@ export type ServiceType = (typeof SERVICE_TYPES)[number];
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
 
-export const signUpSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
-  password: z.string().min(8).max(200),
-  full_name: z.string().trim().min(2).max(100),
-  phone: z
-    .string()
-    .trim()
-    .min(6)
-    .max(20)
-    .regex(/^\+?[0-9 ()-]+$/, "Phone may contain digits, spaces, + and brackets only")
-    .optional(),
-  // Admins cannot self-register. An existing admin must create them.
-  role: z.enum(["customer", "driver", "shop"]),
-  shop_name: z.string().trim().min(2).max(120).optional(),
-  referral_code: z.string().trim().toUpperCase().max(16).optional(),
-});
+const optionalEmail = z.string().trim().toLowerCase().email().max(254).optional();
+
+const optionalPhone = z
+  .string()
+  .trim()
+  .min(6)
+  .max(20)
+  .regex(/^\+?[0-9 ()-]+$/, "Phone may contain digits, spaces, + and brackets only")
+  .optional();
+
+export const signUpSchema = z
+  .object({
+    email: optionalEmail,
+    password: z.string().min(8).max(200),
+    full_name: z.string().trim().min(2).max(100),
+    phone: optionalPhone,
+    // Admins cannot self-register. An existing admin must create them.
+    role: z.enum(["customer", "driver", "shop"]),
+    shop_name: z.string().trim().min(2).max(120).optional(),
+    referral_code: z.string().trim().toUpperCase().max(16).optional(),
+  })
+  .refine((value) => Boolean(value.email || value.phone), {
+    message: "Enter an email address or a phone number",
+    path: ["email"],
+  });
 
 export const shopProfileSchema = z.object({
   shop_name: z.string().trim().min(2).max(120),
@@ -59,8 +68,18 @@ export const orderStatusSchema = z.object({
 });
 
 export const signInSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
+  identifier: z.string().trim().min(3).max(254),
   password: z.string().min(1).max(200),
+});
+
+export const forgotPasswordSchema = z.object({
+  identifier: z.string().trim().min(3).max(254),
+});
+
+export const resetPasswordSchema = z.object({
+  identifier: z.string().trim().min(3).max(254),
+  code: z.string().trim().min(6).max(16),
+  password: z.string().min(8).max(200),
 });
 
 export const tripRequestSchema = z.object({

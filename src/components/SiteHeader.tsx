@@ -22,7 +22,12 @@ const DASHBOARD_BY_ROLE: Record<string, { href: string; label: string }> = {
   admin: { href: "/nen", label: "Admin" },
 };
 
-const AUTH_ROUTES = new Set(["/signin", "/signup"]);
+const AUTH_ROUTES = new Set([
+  "/signin",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+]);
 
 export function SiteHeader() {
   const { user, ready, signOut } = useAuth();

@@ -7,7 +7,7 @@ import { api } from "@/lib/client";
 
 type User = {
   id: string;
-  email: string;
+  email: string | null;
   full_name: string;
   role: string;
   is_active: boolean;

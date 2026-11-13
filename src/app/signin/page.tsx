@@ -10,8 +10,9 @@ import { dashboardFor } from "@/lib/roles";
 export default function SignInPage() {
   const { signIn, user, ready } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -20,12 +21,18 @@ export default function SignInPage() {
     if (ready && user) router.replace(dashboardFor(user.role));
   }, [ready, user, router]);
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("reset") === "1") {
+      setNotice("Password updated. Sign in with your new password.");
+    }
+  }, []);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      const user = await signIn(email.trim(), password);
+      const user = await signIn(identifier.trim(), password);
       router.push(dashboardFor(user.role));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
@@ -46,20 +53,34 @@ export default function SignInPage() {
           className="mx-auto rounded-2xl"
         />
         <h1 className="mt-4 text-center text-2xl font-bold">Sign in</h1>
+        {notice && (
+          <p role="status" className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
+            {notice}
+          </p>
+        )}
         <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate={false}>
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Email</span>
+            <span className="text-sm font-medium text-gray-700">Email or phone</span>
             <input
-              type="email"
+              type="text"
               required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
+              placeholder="you@example.com or +211 921 234 567"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
             />
           </label>
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Password</span>
+            <span className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Password</span>
+              <Link
+                href="/forgot-password"
+                className="text-sm font-medium text-orange-600 hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </span>
             <input
               type="password"
               required

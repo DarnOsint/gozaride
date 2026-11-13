@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;  -- gen_random_uuid() on older Postgres
 -- ---------------------------------------------------------------- users
 CREATE TABLE IF NOT EXISTS users (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  email            text NOT NULL UNIQUE CHECK (email = lower(email)),
+  email            text UNIQUE CHECK (email IS NULL OR email = lower(email)),
   password_hash    text NOT NULL,
   full_name        text NOT NULL CHECK (char_length(full_name) BETWEEN 2 AND 100),
   phone            text CHECK (phone IS NULL OR char_length(phone) BETWEEN 6 AND 20),
@@ -22,6 +22,19 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE INDEX IF NOT EXISTS users_role_idx ON users (role);
+
+-- ------------------------------------------------------- password resets
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  token_hash text NOT NULL,
+  channel    text NOT NULL CHECK (channel IN ('email', 'sms')),
+  expires_at timestamptz NOT NULL,
+  used_at    timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS password_reset_user_idx ON password_reset_tokens (user_id);
 
 -- ------------------------------------------------------- driver profiles
 CREATE TABLE IF NOT EXISTS driver_profiles (
@@ -354,3 +367,13 @@ END $$;
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS tip_usd numeric(12, 2) NOT NULL DEFAULT 0 CHECK (tip_usd >= 0);
 ALTER TABLE earnings_history ADD COLUMN IF NOT EXISTS tip_ssp numeric(14, 2) NOT NULL DEFAULT 0 CHECK (tip_ssp >= 0);
 ALTER TABLE earnings_history ADD COLUMN IF NOT EXISTS tip_usd numeric(12, 2) NOT NULL DEFAULT 0 CHECK (tip_usd >= 0);
+
+-- v3: sign up and sign in with either an email or a phone number.
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at timestamptz;
+
+-- One account per phone number, comparing the last 9 digits so "+211 921 234 567",
+-- "0921234567" and "211921234567" cannot be registered twice.
+CREATE UNIQUE INDEX IF NOT EXISTS users_phone_digits_uniq
+  ON users (right(regexp_replace(phone, '\D', '', 'g'), 9))
+  WHERE phone IS NOT NULL;

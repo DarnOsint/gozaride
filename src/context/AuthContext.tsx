@@ -14,7 +14,8 @@ export type Role = "customer" | "driver" | "shop" | "admin";
 
 export type User = {
   id: string;
-  email: string;
+  email: string | null;
+  phone: string | null;
   full_name: string;
   role: Role;
   default_currency: "usd" | "ssp";
@@ -27,9 +28,9 @@ type AuthState = {
 };
 
 type AuthContextValue = AuthState & {
-  signIn: (email: string, password: string) => Promise<User>;
+  signIn: (identifier: string, password: string) => Promise<User>;
   signUp: (input: {
-    email: string;
+    email?: string;
     password: string;
     full_name: string;
     phone?: string;
@@ -98,10 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(
-    async (email: string, password: string) => {
+    async (identifier: string, password: string) => {
       const data = await postJson<{ token: string; user: User }>(
         "/api/auth/signin",
-        { email, password },
+        { identifier, password },
       );
       persist(data.token, data.user);
       return data.user;
@@ -111,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(
     async (input: {
-      email: string;
+      email?: string;
       password: string;
       full_name: string;
       phone?: string;

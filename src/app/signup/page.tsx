@@ -38,6 +38,10 @@ export default function SignUpPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!email.trim() && !phone.trim()) {
+      setError("Enter an email address or a phone number");
+      return;
+    }
     if (password !== confirm) {
       setError("Passwords do not match");
       return;
@@ -46,7 +50,7 @@ export default function SignUpPage() {
     try {
       const user = await signUp({
         full_name: fullName.trim(),
-        email: email.trim(),
+        email: email.trim() || undefined,
         phone: phone.trim() || undefined,
         password,
         role,
@@ -100,13 +104,16 @@ export default function SignUpPage() {
             <span className="text-sm font-medium text-gray-700">Full name</span>
             <input className={field} required minLength={2} maxLength={100} value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" />
           </label>
+          <p className="text-sm text-gray-600">
+            Use your email address, your phone number, or both — you can sign in with either.
+          </p>
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Email</span>
-            <input className={field} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+            <input className={field} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@example.com" />
           </label>
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Phone (optional)</span>
-            <input className={field} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+211..." autoComplete="tel" />
+            <span className="text-sm font-medium text-gray-700">Phone</span>
+            <input className={field} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+211 921 234 567" autoComplete="tel" />
           </label>
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Password (min 8 characters)</span>

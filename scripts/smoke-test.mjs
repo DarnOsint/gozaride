@@ -42,7 +42,7 @@ if (r.status === 503) {
 }
 
 // 2. Admin sets the rate.
-const admin = await api("POST", "/api/auth/signin", { body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } });
+const admin = await api("POST", "/api/auth/signin", { body: { identifier: ADMIN_EMAIL, password: ADMIN_PASSWORD } });
 check("admin signs in", admin.status === 200 && admin.json.token, JSON.stringify(admin));
 r = await api("POST", "/api/admin/rates", { token: admin.json.token, body: { ssp_per_usd: 1500, note: "smoke test rate" } });
 check("admin sets rate", r.status === 201 && r.json.ssp_per_usd === 1500, JSON.stringify(r));
@@ -74,7 +74,7 @@ const selfAdmin = await api("POST", "/api/auth/signup", {
 });
 check("admin self-registration rejected", selfAdmin.status === 422, JSON.stringify(selfAdmin));
 
-const badSignin = await api("POST", "/api/auth/signin", { body: { email: `cust-${run}@test.gozaride`, password: "wrong-password" } });
+const badSignin = await api("POST", "/api/auth/signin", { body: { identifier: `cust-${run}@test.gozaride`, password: "wrong-password" } });
 check("wrong password rejected", badSignin.status === 401, JSON.stringify(badSignin));
 
 const me = await api("GET", "/api/auth/me", { token: customer.json.token });

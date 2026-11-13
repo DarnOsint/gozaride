@@ -4,6 +4,7 @@ import { parseBody, fail, ok, serverError, isResponse } from "@/lib/http";
 import { signToken } from "@/lib/auth";
 import { signUpSchema } from "@/lib/validation";
 import { clientIp, hitLimit } from "@/lib/rateLimit";
+import { normalizeEmail, normalizePhone } from "@/lib/identity";
 import {
   awardPoints,
   newReferralCode,
@@ -25,22 +26,36 @@ export async function POST(req: Request) {
 
   try {
     const passwordHash = await bcrypt.hash(body.password, 12);
+    const email = body.email ? normalizeEmail(body.email) : null;
+    const phone = body.phone ? normalizePhone(body.phone) : null;
     const user = await withTx(async (db) => {
-      const dup = await db.query("SELECT 1 FROM users WHERE email = $1", [body.email]);
-      if (dup.rowCount) return null;
+      if (email) {
+        const dup = await db.query("SELECT 1 FROM users WHERE email = $1", [email]);
+        if (dup.rowCount) return { conflict: "email" as const };
+      }
+      if (phone) {
+        const dup = await db.query(
+          `SELECT 1 FROM users
+            WHERE phone IS NOT NULL
+              AND right(regexp_replace(phone, '\\D', '', 'g'), 9) = right($1, 9)`,
+          [phone],
+        );
+        if (dup.rowCount) return { conflict: "phone" as const };
+      }
 
       const code = newReferralCode();
       const inserted = await db.query<{
         id: string;
-        email: string;
+        email: string | null;
+        phone: string | null;
         full_name: string;
         role: string;
         default_currency: string;
       }>(
         `INSERT INTO users (email, password_hash, full_name, phone, role, referral_code)
          VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, email, full_name, role, default_currency`,
-        [body.email, passwordHash, body.full_name, body.phone ?? null, body.role, code],
+         RETURNING id, email, phone, full_name, role, default_currency`,
+        [email, passwordHash, body.full_name, phone, body.role, code],
       );
       const u = inserted.rows[0];
       await db.query("INSERT INTO wallets (user_id) VALUES ($1)", [u.id]);
@@ -86,7 +101,14 @@ export async function POST(req: Request) {
       return u;
     });
 
-    if (!user) return fail(409, "An account with this email already exists");
+    if ("conflict" in user) {
+      return fail(
+        409,
+        user.conflict === "email"
+          ? "An account with this email already exists"
+          : "An account with this phone number already exists",
+      );
+    }
 
     const token = signToken(user.id, user.role as "customer" | "driver" | "shop");
     // Fire-and-forget welcome notification (never blocks signup on failure).

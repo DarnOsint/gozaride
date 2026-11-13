@@ -84,7 +84,11 @@ function ProfileDashboard({ token }: { token: string }) {
           </div>
           <div>
             <p className="text-sm text-gray-500">Email</p>
-            <p className="font-medium">{user?.email}</p>
+            <p className="font-medium">{user?.email ?? "Not set"}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Phone</p>
+            <p className="font-medium">{user?.phone ?? "Not set"}</p>
           </div>
           <div>
             <p className="text-sm text-gray-500">Role</p>
